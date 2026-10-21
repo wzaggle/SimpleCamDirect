@@ -1,0 +1,278 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/simplecam/camera-profile.schema.json",
+  "title": "Camera Profile Draft",
+  "description": "Draft schema for declarative OBS PTZ camera profiles. Product identity and schema version are provisional. Initial implementation is VISCA-only; later protocols require implemented drivers and editor modes.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "identity", "support", "capabilities", "connections", "commands"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "manufacturer", "model", "displayName"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{2,95}$"},
+        "manufacturer": {"type": "string", "minLength": 1, "maxLength": 120},
+        "model": {"type": "string", "minLength": 1, "maxLength": 120},
+        "displayName": {"type": "string", "minLength": 1, "maxLength": 160},
+        "family": {"type": "string", "maxLength": 120},
+        "aliases": {"type": "array", "uniqueItems": true, "items": {"type": "string", "maxLength": 120}},
+        "hardwareRevisions": {"type": "array", "uniqueItems": true, "items": {"type": "string", "maxLength": 80}},
+        "firmware": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "supported": {"type": "array", "items": {"type": "string", "maxLength": 80}},
+            "tested": {"type": "array", "items": {"type": "string", "maxLength": 80}},
+            "excluded": {"type": "array", "items": {"type": "string", "maxLength": 80}},
+            "notes": {"type": "string", "maxLength": 2000}
+          }
+        }
+      }
+    },
+    "support": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "sources"],
+      "properties": {
+        "status": {"enum": ["draft", "protocol-reviewed", "hardware-tested", "maintained"]},
+        "maintainer": {"type": "string", "maxLength": 160},
+        "lastReviewed": {"type": "string", "format": "date"},
+        "hardwareTest": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "testedBy": {"type": "string", "maxLength": 160},
+            "testedAt": {"type": "string", "format": "date"},
+            "firmware": {"type": "string", "maxLength": 80},
+            "connectionId": {"type": "string", "maxLength": 80},
+            "pluginVersion": {"type": "string", "maxLength": 80},
+            "obsVersion": {"type": "string", "maxLength": 80},
+            "platform": {"enum": ["windows-x64", "macos-arm64", "macos-x86_64", "linux-x86_64", "linux-aarch64", "other"]},
+            "notes": {"type": "string", "maxLength": 3000}
+          }
+        },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "url", "accessed"],
+            "properties": {
+              "kind": {"enum": ["manufacturer-manual", "command-reference", "firmware-note", "sdk-documentation", "other"]},
+              "title": {"type": "string", "maxLength": 240},
+              "url": {"type": "string", "format": "uri"},
+              "revision": {"type": "string", "maxLength": 100},
+              "accessed": {"type": "string", "format": "date"},
+              "notes": {"type": "string", "maxLength": 1000}
+            }
+          }
+        }
+      }
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operations"],
+      "properties": {
+        "operations": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "panTilt": {"$ref": "#/$defs/operationCapability"},
+            "panTiltSpeed": {"$ref": "#/$defs/operationCapability"},
+            "home": {"$ref": "#/$defs/operationCapability"},
+            "zoom": {"$ref": "#/$defs/operationCapability"},
+            "zoomSpeed": {"$ref": "#/$defs/operationCapability"},
+            "zoomAbsolute": {"$ref": "#/$defs/operationCapability"},
+            "focus": {"$ref": "#/$defs/operationCapability"},
+            "presetRecall": {"$ref": "#/$defs/operationCapability"},
+            "presetRecallSpeed": {"$ref": "#/$defs/operationCapability"},
+            "presetStore": {"$ref": "#/$defs/operationCapability"},
+            "presetClear": {"$ref": "#/$defs/operationCapability"},
+            "power": {"$ref": "#/$defs/operationCapability"},
+            "backlight": {"$ref": "#/$defs/operationCapability"},
+            "whiteBalance": {"$ref": "#/$defs/operationCapability"},
+            "exposureCompensation": {"$ref": "#/$defs/operationCapability"},
+            "positionInquiry": {"$ref": "#/$defs/operationCapability"},
+            "zoomInquiry": {"$ref": "#/$defs/operationCapability"}
+          }
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "presetMin": {"type": "integer", "minimum": 0, "maximum": 65535},
+            "presetMax": {"type": "integer", "minimum": 0, "maximum": 65535},
+            "presetReserved": {"type": "array", "uniqueItems": true, "items": {"type": "integer", "minimum": 0, "maximum": 65535}},
+            "panSpeed": {"$ref": "#/$defs/range"},
+            "tiltSpeed": {"$ref": "#/$defs/range"},
+            "zoomSpeed": {"$ref": "#/$defs/range"},
+            "presetTransitionSpeed": {"$ref": "#/$defs/range"},
+            "speedCurve": {"enum": ["linear", "visca-curve", "vendor-defined"]},
+            "zoom": {"$ref": "#/$defs/range"},
+            "zoomAbsolute": {"$ref": "#/$defs/range"},
+            "focus": {"$ref": "#/$defs/range"}
+          }
+        }
+      }
+    },
+    "connections": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "label", "protocol", "transport", "framing"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{1,63}$"},
+          "label": {"type": "string", "minLength": 1, "maxLength": 120},
+          "protocol": {"enum": ["visca", "pelco-d", "pelco-p", "onvif-ptz", "ndi-ptz", "dvip", "manufacturer-api"]},
+          "transport": {"enum": ["serial-rs232", "serial-rs422", "serial-rs485", "tcp", "udp", "onvif-http", "ndi-sdk"]},
+          "framing": {"enum": ["raw-visca", "visca-ip-header", "pelco-frame", "onvif-ptz-service", "ndi-ptz-api", "dvip-frame", "manufacturer-defined"]},
+          "defaultPort": {"type": "integer", "minimum": 1, "maximum": 65535},
+          "portRequired": {"type": "boolean"},
+          "addressing": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "mode": {"enum": ["none", "visca-address-byte", "profile-fixed", "user-configured"]},
+              "default": {"type": ["integer", "string"]},
+              "minimum": {"type": "integer", "minimum": 0},
+              "maximum": {"type": "integer", "minimum": 0},
+              "ipAddressForced": {"type": "boolean"}
+            }
+          },
+          "serial": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "baudRates": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "integer", "enum": [1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200]}},
+              "defaultBaudRate": {"type": "integer", "enum": [1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200]},
+              "dataBits": {"type": "integer", "enum": [7, 8]},
+              "parity": {"enum": ["none", "even", "odd"]},
+              "stopBits": {"enum": [1, 1.5, 2]},
+              "flowControl": {"enum": ["none", "hardware", "software"]},
+              "fullDuplex": {"type": "boolean"},
+              "wiringNotes": {"type": "string", "maxLength": 1500}
+            }
+          },
+          "network": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "ipVersions": {"type": "array", "uniqueItems": true, "items": {"enum": ["ipv4", "ipv6"]}},
+              "authentication": {"enum": ["none", "optional", "required", "platform-credential-store"]},
+              "tls": {"type": "boolean"},
+              "discovery": {"enum": ["none", "manual", "onvif", "ndi", "vendor"]}
+            }
+          },
+          "response": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "policy": {"enum": ["none", "ack", "ack-and-completion", "reply", "http-status", "ndi-result"]},
+              "timeoutMs": {"type": "integer", "minimum": 50, "maximum": 120000},
+              "retryCount": {"type": "integer", "minimum": 0, "maximum": 5},
+              "serializePerCamera": {"type": "boolean"},
+              "notes": {"type": "string", "maxLength": 1500}
+            }
+          },
+          "setupNotes": {"type": "array", "items": {"type": "string", "maxLength": 500}}
+        }
+      }
+    },
+    "commands": {
+      "type": "object",
+      "description": "Bindings to known driver operations. Profiles provide declarative protocol data only; drivers own encoding and parsing.",
+      "additionalProperties": false,
+      "properties": {
+        "movePanTilt": {"$ref": "#/$defs/commandBinding"},
+        "stopPanTilt": {"$ref": "#/$defs/commandBinding"},
+        "home": {"$ref": "#/$defs/commandBinding"},
+        "zoomIn": {"$ref": "#/$defs/commandBinding"},
+        "zoomOut": {"$ref": "#/$defs/commandBinding"},
+        "zoomStop": {"$ref": "#/$defs/commandBinding"},
+        "zoomAbsolute": {"$ref": "#/$defs/commandBinding"},
+        "focusNear": {"$ref": "#/$defs/commandBinding"},
+        "focusFar": {"$ref": "#/$defs/commandBinding"},
+        "focusStop": {"$ref": "#/$defs/commandBinding"},
+        "focusAuto": {"$ref": "#/$defs/commandBinding"},
+        "focusManual": {"$ref": "#/$defs/commandBinding"},
+        "whiteBalanceAuto": {"$ref": "#/$defs/commandBinding"},
+        "whiteBalanceManual": {"$ref": "#/$defs/commandBinding"},
+        "presetRecall": {"$ref": "#/$defs/commandBinding"},
+        "presetStore": {"$ref": "#/$defs/commandBinding"},
+        "presetClear": {"$ref": "#/$defs/commandBinding"},
+        "powerOn": {"$ref": "#/$defs/commandBinding"},
+        "powerOff": {"$ref": "#/$defs/commandBinding"},
+        "backlightOn": {"$ref": "#/$defs/commandBinding"},
+        "backlightOff": {"$ref": "#/$defs/commandBinding"},
+        "backlightAuto": {"$ref": "#/$defs/commandBinding"},
+        "backlightManual": {"$ref": "#/$defs/commandBinding"},
+        "exposureCompOn": {"$ref": "#/$defs/commandBinding"},
+        "exposureCompOff": {"$ref": "#/$defs/commandBinding"},
+        "positionInquiry": {"$ref": "#/$defs/commandBinding"},
+        "zoomInquiry": {"$ref": "#/$defs/commandBinding"}
+      }
+    },
+    "notes": {"type": "array", "items": {"type": "string", "maxLength": 1000}}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"support": {"properties": {"status": {"enum": ["hardware-tested", "maintained"]}}}}},
+      "then": {
+        "properties": {
+          "support": {
+            "required": ["hardwareTest"],
+            "properties": {
+              "hardwareTest": {
+                "required": ["testedBy", "testedAt", "firmware", "connectionId", "pluginVersion", "obsVersion", "platform"]
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "operationCapability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["supported"],
+      "properties": {
+        "supported": {"type": "boolean"},
+        "reason": {"type": "string", "maxLength": 500},
+        "requires": {"type": "array", "uniqueItems": true, "items": {"type": "string", "maxLength": 80}}
+      }
+    },
+    "range": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minimum", "maximum"],
+      "properties": {
+        "minimum": {"type": "number"},
+        "maximum": {"type": "number"},
+        "units": {"type": "string", "maxLength": 40},
+        "encoding": {"type": "string", "maxLength": 100}
+      }
+    },
+    "commandBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["driverOperation"],
+      "properties": {
+        "driverOperation": {"type": "string", "pattern": "^[a-z][a-zA-Z0-9._-]{1,79}$"},
+        "parameters": {"type": "object"},
+        "template": {"type": "string", "minLength": 1, "maxLength": 1024, "description": "Protocol command format string using only registered typed placeholders and allowlisted formatters; not executable code."},
+        "templateLanguageVersion": {"type": "integer", "minimum": 1, "maximum": 255, "default": 1, "description": "Version of the bounded template grammar. Omission means version 1; runtimes reject unsupported versions rather than guessing."},
+        "sequence": {"type": "array", "items": {"type": "string", "minLength": 1, "maxLength": 1024, "description": "Declarative driver step or bounded template using only registered typed placeholders; never executable code."}},
+        "destructive": {"type": "boolean"},
+        "evidenceRefs": {"type": "array", "uniqueItems": true, "items": {"type": "string", "maxLength": 100}}
+      }
+    }
+  }
+}

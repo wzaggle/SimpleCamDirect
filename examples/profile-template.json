@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "identity": {
+    "id": "example.generic-visca",
+    "manufacturer": "Example Manufacturer",
+    "model": "Example Model",
+    "displayName": "Example Model (profile template)",
+    "family": "Example Family",
+    "aliases": [],
+    "hardwareRevisions": [],
+    "firmware": {
+      "supported": [],
+      "tested": [],
+      "excluded": [],
+      "notes": "Replace with exact model and firmware applicability before distribution."
+    }
+  },
+  "support": {
+    "status": "draft",
+    "maintainer": "",
+    "sources": [
+      {
+        "kind": "manufacturer-manual",
+        "title": "Replace with the exact model's official manual",
+        "url": "https://example.invalid/manual",
+        "revision": "",
+        "accessed": "2026-10-21",
+        "notes": "Template source only; replace with an authoritative reference."
+      }
+    ]
+  },
+  "capabilities": {
+    "operations": {
+      "panTilt": {"supported": true},
+      "panTiltSpeed": {"supported": true},
+      "home": {"supported": true},
+      "zoom": {"supported": true},
+      "zoomSpeed": {"supported": false, "reason": "Confirm model-specific speed support before enabling."},
+      "focus": {"supported": false, "reason": "Confirm support from the exact model reference."},
+      "presetRecall": {"supported": true},
+      "presetRecallSpeed": {"supported": false, "reason": "Variable preset transition speed is model-specific."},
+      "presetStore": {"supported": true},
+      "presetClear": {"supported": false, "reason": "Not enabled in this example."},
+      "power": {"supported": false, "reason": "Keep disruptive operations off until tested."},
+      "backlight": {"supported": false},
+      "whiteBalance": {"supported": false},
+      "exposureCompensation": {"supported": false},
+      "positionInquiry": {"supported": false},
+      "zoomInquiry": {"supported": false}
+    },
+    "limits": {
+      "presetMin": 0,
+      "presetMax": 15,
+      "presetReserved": [],
+      "panSpeed": {"minimum": 1, "maximum": 24, "units": "protocol steps", "encoding": "example only"},
+      "tiltSpeed": {"minimum": 1, "maximum": 20, "units": "protocol steps", "encoding": "example only"},
+      "presetTransitionSpeed": {"minimum": 1, "maximum": 127, "units": "protocol steps", "encoding": "example only; only enable if the exact model supports variable preset speed"},
+      "speedCurve": "vendor-defined",
+      "zoom": {"minimum": 0, "maximum": 1, "units": "normalized", "encoding": "example only"}
+    }
+  },
+  "connections": [
+    {
+      "id": "visca-tcp-example",
+      "label": "VISCA over TCP (example only)",
+      "protocol": "visca",
+      "transport": "tcp",
+      "framing": "raw-visca",
+      "defaultPort": 5678,
+      "portRequired": true,
+      "addressing": {
+        "mode": "visca-address-byte",
+        "default": "0x81",
+        "minimum": 1,
+        "maximum": 7,
+        "ipAddressForced": false
+      },
+      "network": {
+        "ipVersions": ["ipv4"],
+        "authentication": "none",
+        "tls": false,
+        "discovery": "manual"
+      },
+      "response": {
+        "policy": "ack-and-completion",
+        "timeoutMs": 5000,
+        "retryCount": 0,
+        "serializePerCamera": true,
+        "notes": "Never reuse this timing blindly; verify the target camera protocol."
+      },
+      "setupNotes": ["Example values are not a vendor camera recommendation."]
+    }
+  ],
+  "commands": {
+    "movePanTilt": {"driverOperation": "visca.panTilt", "parameters": {"template": "Replace with supported driver parameters"}},
+    "stopPanTilt": {"driverOperation": "visca.panTiltStop"},
+    "home": {"driverOperation": "visca.home"},
+    "zoomIn": {"driverOperation": "visca.zoomIn"},
+    "zoomOut": {"driverOperation": "visca.zoomOut"},
+    "zoomStop": {"driverOperation": "visca.zoomStop"},
+    "presetRecall": {"driverOperation": "visca.presetRecall"},
+    "presetStore": {"driverOperation": "visca.presetStore", "destructive": true}
+  },
+  "notes": [
+    "This file demonstrates shape only. It must not appear as a supported/selectable camera profile.",
+    "Replace every example field and test the exact model, firmware, connection and command set."
+  ]
+}

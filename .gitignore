@@ -1,0 +1,13 @@
+# Build outputs
+build/
+build-*
+out/
+cmake-build-*/
+.vs/
+.vscode/
+
+# IDE / OS noise
+.DS_Store
+Thumbs.db
+*.user
+*.suo

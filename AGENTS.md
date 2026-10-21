@@ -1,0 +1,77 @@
+# Instructions for coding agents
+
+## Project intent
+
+This repository is **SimpleCam Direct**, a new, independent OBS PTZ-control plugin inspired by proven SimpleCam behavior. It is not the separate SimpleCamQt desktop controller and should not depend on that application, its Windows registry settings, or its temporary-file request protocol. The intended direction is direct in-process control from OBS source events and dock controls to a camera transport service.
+
+The plugin is human-maintained and may be developed with ChatGPT, Codex, or other coding agents. Treat these instructions and the linked design documents as project context. Read them before proposing or changing architecture.
+
+## Required reading order
+
+1. `README.md`
+2. `docs/PROJECT_MAP.md`
+3. `docs/CAMERA_PROFILE_REVIEW.md`, `docs/CAMERA_PROFILE_EDITOR.md`, `docs/CAMERA_ACTION_CONTRACT.md`, `docs/PROFILE_VARIABLES.md`, `docs/PROTOCOL_EVOLUTION.md`, `docs/UI_THEMING.md`, and `schemas/camera-profile.schema.json` for camera/profile/action work
+4. `docs/DEVELOPMENT_ROADMAP.md` and `docs/SIMPLECAMQT_PARITY_CHECKLIST.md` for current milestone scope and its first exit gate
+5. `docs/PLATFORM_TEST_CHECKLIST.md` for platform, packaging, or communication work
+6. `docs/USER_GUIDE_PLAN.md` for user-facing changes
+
+Also inspect the current source, build files, tests, and git history before editing. Documentation can become stale; source and tests establish current implementation behavior. If a source change conflicts with a stated product decision, report the conflict before silently choosing one.
+
+## Product decisions to preserve
+
+- Follow the product principle: hardware should be inexpensive, lightweight, and durable; software should be pretty, easy, and fully functional. Prefer useful, polished behavior over unnecessary feature or dependency weight.
+- Preserve the active milestone scope in `docs/DEVELOPMENT_ROADMAP.md`. The first deliverable is Windows + VISCA + AViPAS AV-1280W parity, with no general profile editor in that milestone.
+- Preserve scene-embedded named preset sources with camera selection, preset selection, preview/program/both behavior, delay, source-name clarity, and duplicate-source awareness unless an issue explicitly changes the behavior.
+- Keep scene-triggered camera requests direct and independent of a separate SimpleCamQt process.
+- Do not reserve a network camera exclusively for SimpleCam Direct. SimpleCamQt and the camera web interface remain valid command clients; preserve OBS source-list order and never coalesce repeated scene preset requests.
+- Separate UI, high-level camera actions, profile/catalog loading, protocol drivers, and transport I/O.
+- Camera profiles are data. A JSON profile must never execute shell commands, scripts, arbitrary dynamic code, or unvalidated URLs.
+- Network transport, serial transport, VISCA, ONVIF, and NDI PTZ are distinct concerns. Do not assume that VISCA-over-TCP, VISCA-over-UDP, a VISCA-over-IP packet envelope, ONVIF, or NDI control are interchangeable.
+- Profiles and command templates must identify model/firmware applicability, transport/framing, capabilities, and evidence. Unsupported operations must be disabled or reported as unsupported rather than guessed.
+- Use Windows as the first implementation and behavior reference. Port only after the Windows implementation is tested. Test Apple Silicon separately from Intel macOS; then test Linux.
+- Preserve an explicit migration decision for existing OBS scene sources. Never accidentally reuse the old `Camera_Preset2` source id in a way that makes the Lua script and native plugin compete for the same source type.
+
+## Coding rules
+
+- Keep work incremental and reviewable. Make one cohesive change at a time.
+- Follow the repository's existing C++ standard, formatting rules, OBS plugin template, and dependency policy. Do not introduce Qt or another large dependency without a documented reason and maintainer approval.
+- Never block OBS UI, frontend, source callbacks, or render threads on camera I/O. Use a serialized asynchronous command queue per physical camera, with explicit ownership and cancellation/shutdown behavior.
+- Handle ACK, completion, inquiry, protocol-error, timeout, and partial/disconnected transport conditions according to the selected protocol driver. Do not replace response handling with arbitrary sleeps.
+- Keep all camera-specific command bytes, parameter ranges, transport variants, and quirks in a validated profile or in a named protocol driver. Avoid scattered model-name conditionals.
+- Profile templates may use only the plugin's registered typed variables and allowlisted formatters. Do not implement C `printf`, expression evaluation, or user-defined variables as executable behavior.
+- Implement semantic camera actions before protocol bindings. Initial protocol authoring is VISCA; later ONVIF and NDI support is PTZ-only and must not add image-control features by assumption.
+- Implement protocols incrementally behind separate adapters. New protocol work must preserve the existing VISCA profile grammar, encoded packet fixtures, action semantics, and hardware-tested behavior. Run all earlier protocol regression suites after shared-layer changes.
+- Keep the camera dock an OBS-managed dock when floating. Docked content must follow the OBS theme exactly; optionally allow `SimpleCam Classic` accents only while floating. Redocking restores OBS styling. Scope plugin styling to its own widgets and never change the application-wide stylesheet or palette.
+- Extend variable registries and serializers additively, with namespaced typed values and explicit format versions. Never change the meaning of an existing placeholder or formatter silently; reject unsupported format versions rather than guessing.
+- Keep manual movement speed separate from per-preset transition speed. Preserve per-source transition-speed settings and only enable a speed control when the selected profile declares support.
+- Validate untrusted profile input: schema version, required fields, protocol/transport combinations, byte templates, value ranges, duplicate identifiers, maximum sizes, and supported operations. Reject invalid profiles with a readable diagnostic; do not crash or partially activate them.
+- Keep credentials and per-install network addresses out of distributed profiles. Store secrets using platform-appropriate secure storage where needed; redact them from logs.
+- Log which profile id/version, transport type, and command operation failed, but never log passwords or sensitive credentials. Offer a safe diagnostic export that omits secrets.
+- Changes to a camera profile require provenance links, compatibility claims, validation, and test-status labels. Never claim hardware validation from a schema check alone.
+- Do not claim an OS/CPU architecture works until its build and runtime checks have passed. Distinguish compile-only, OBS-load, simulated transport, and real-camera test evidence.
+- Keep public APIs, serialized OBS settings, source ids, and profile schema changes backward-compatible where practical. If a migration is needed, add a versioned migration and test it.
+
+## Before editing
+
+1. Summarize the requested behavior and locate the existing code path.
+2. Identify affected UI, source lifecycle, driver, transport, profile, packaging, and documentation components.
+3. State assumptions and risks, especially camera movement, preset overwrite, camera power, and backward compatibility.
+4. Make the smallest coherent implementation.
+
+## Before declaring work complete
+
+- Build the affected target with the documented configuration.
+- Run the closest automated checks (profile schema/catalog tests, command encoding/decoding tests, source settings migration tests, or platform build) and report what did and did not run.
+- For camera protocol changes, include packet-level tests using documented examples and specify required real-camera checks.
+- Update the relevant docs and the platform checklist when behavior, settings, profile fields, or supported platforms change.
+- Report exact files changed, build/test results, unverified items, and any manual camera test the maintainer should run.
+
+## Community contribution review
+
+For a fork or pull request, identify which parts are generally useful to the core and which are fork-specific. Review profile provenance and real-hardware evidence. Do not merge generated command strings solely because they compile or pass JSON validation. Keep a contributor's fork-specific workflow isolated unless the core maintainer chooses to adopt it.
+
+Every fork must maintain its own fork-local agent context in its root `AGENTS.md`. Start from this upstream file, retain the shared rules, and add a clearly marked `Fork-local context` section with the fork's purpose, behavior differences, affected modules, platform targets, and required validation metrics. Keep this section current as the fork changes. If a coding agent is used, it must read and update this section before changing code.
+
+The fork-local instructions guide work in the fork; they are not automatically changes proposed for upstream. A pull request must include the fork-local context (or a link to the exact fork commit/file) and the evidence block in `docs/PULL_REQUEST_EVIDENCE_TEMPLATE.md`. Add fork-specific material to upstream `AGENTS.md` only when it is generalizable and the maintainer accepts it.
+
+Human-led submissions may use the minimum evidence level. A PR missing a required entry is incomplete; use `N/A` with a reason when a metric does not apply. AI coding agents must follow the enhanced evidence level in `docs/FORK_AND_AGENT_CONTRIBUTIONS.md`; they must report test counts and platform results accurately, mark unavailable hardware tests as not run, and never infer success from a build or a profile parse.
