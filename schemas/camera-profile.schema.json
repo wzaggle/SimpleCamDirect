@@ -105,7 +105,7 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "presetCapacity": {"type": "integer", "minimum": 0, "maximum": 65535, "description": "Model's default number of usable physical preset slots. A configured camera may override this for a unit or firmware variant; the UI displays up to five groups of 14 presets and disables slots beyond the effective capacity."},
+            "presetCapacity": {"type": "integer", "minimum": 0, "maximum": 65535, "description": "Model's default number of usable physical preset slots. A configured camera may override this for a unit or firmware variant. The UI starts with five pages of 14 slots and exposes additional pages up to the effective capacity; slots with no mapped physical preset or beyond capacity are disabled and labeled ---."},
             "presetMin": {"type": "integer", "minimum": 0, "maximum": 65535},
             "presetMax": {"type": "integer", "minimum": 0, "maximum": 65535},
             "presetReserved": {"type": "array", "uniqueItems": true, "items": {"type": "integer", "minimum": 0, "maximum": 65535}},
