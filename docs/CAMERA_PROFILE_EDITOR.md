@@ -10,9 +10,9 @@ This is a product and safety contract for the later profile-editor milestone in 
 
 | Data | Example | Storage and edit behavior |
 |---|---|---|
-| Shipped model profile | Manufacturer/model, supported protocol variants, command bindings, capabilities and evidence | Installed profile catalog; read-only in the editor |
+| Shipped model profile | Manufacturer/model, supported protocol variants, command bindings, capabilities (including default usable preset capacity) and evidence | Installed profile catalog; read-only in the editor |
 | User profile or custom variant | A tested adjustment to command steps or model quirks | User-writable camera profile directory; user may edit it or Save As another profile |
-| Camera instance settings | Camera name, IP/port, serial device, credentials, selected profile and connection variant | OBS user settings for that physical camera; never copied into a shared profile |
+| Camera instance settings | Camera name, IP/port, serial device, credentials, selected profile and connection variant, plus optional effective preset-capacity override | OBS user settings for that physical camera; never copied into a shared profile |
 
 There is one profile format for shipped and user-created profiles. A custom profile may be created for one physical camera, but it remains a normal reusable profile; the camera's address and other instance-specific settings are kept separately. The editor can be opened from a configured camera's profile selection or from the profile catalog. When editing a shipped profile, it creates a draft copy. **Save As** creates a distinct stable profile id and records the source profile id/version as its parent. It does not change the profile already selected by any camera. A user-owned profile may be saved in place only after validation; write it atomically and require explicit confirmation before changing a profile currently in use. Camera instances do not change profiles until the user explicitly applies one.
 

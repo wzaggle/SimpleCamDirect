@@ -17,10 +17,11 @@ Record for every row: SimpleCamQt result, SimpleCam Direct result, pass/fail, no
 
 ## Preset groups and source resolution
 
-- [ ] A scene preset source stores its camera, logical preview number (1–15), trigger mode, and delay; it does not store a preset group.
+- [ ] A scene preset source stores its camera, logical preview number (1–14), trigger mode, and delay; it does not store a preset group.
 - [ ] While editing a source, the preset list displays names from the currently selected Preview Group.
-- [ ] At runtime, the shared preview action uses `Preview + ((Preview Group - 1) * 15)`; group 1/Preview 1 recalls physical preset 1 and group 2/Preview 1 recalls physical preset 16.
+- [ ] At runtime, the shared preview action uses `Preview + ((Preview Group - 1) * 14)`; group 1/Preview 1 recalls physical preset 1 and group 2/Preview 1 recalls physical preset 15.
 - [ ] Changing Preview Group changes the physical slot recalled by the same source number; the user selects the group they intend.
+- [ ] Camera preset capacity limits available groups and buttons. For capacity 25, group 1 has 14 active buttons; group 2 has 11 active buttons and three dimmed, disabled `---` buttons.
 - [ ] Visual preset swapping and renaming retain the agreed behavior without physically rewriting camera presets.
 - [ ] Scene source labels remain clear after changing group or visual order; renaming and duplicate-source behavior still work.
 - [ ] Repeated requests are not merged or deduplicated, including when two consecutive entries select the same preset.
