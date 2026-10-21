@@ -15,7 +15,7 @@ The first implementation targets VISCA only. ONVIF and NDI PTZ may be added late
 | `zoom` | Direction: in/out; manual zoom speed where supported; start/stop phase | Dock control |
 | `zoomTo` | Absolute target position in the profile's native range; a separate optional speed parameter only when the model's absolute-move operation supports it | Dock control and future scene-source actions |
 | `presetStore` | Preset number `N` | Dock control; confirm before overwriting |
-| `presetRecall` | Preset number `N`; optional per-source transition speed | Dock and scene preset source |
+| `presetRecall` | Physical preset number resolved from the source's group and logical button position; optional per-source transition speed | Dock and scene preset source |
 | `focusMode` | Auto/manual | Dock control |
 | `focusMove` | Near/far; start/stop phase | Dock control |
 | `whiteBalanceMode` | Auto/manual | Dock control |
@@ -24,7 +24,7 @@ The first implementation targets VISCA only. ONVIF and NDI PTZ may be added late
 
 The `start/stop` phases are part of the action contract so a held control can stop safely on release. If a device implements a function as a one-shot step instead, the profile/driver declares that behavior. Unsupported functions are disabled or marked unsupported; do not synthesize a command from a similar-looking VISCA function.
 
-OBS scene sources and camera dock controls call the same in-process camera action service. Scene-source requests must preserve their OBS dispatch order and must not coalesce repeated preset recalls: a later source may intentionally move the camera again, including back to an earlier preset. Serialize this plugin's own protocol transactions as required by the driver. Camera access is not reserved exclusively for this plugin; SimpleCamQt and the camera web interface remain independent clients, with no global ordering guarantee across clients.
+OBS scene sources and Camera Control dock buttons call the same in-process camera action service. Each scene source stores its selected camera, preset group, logical preset/button position, trigger mode, and delay. The service resolves the selected group and saved visual map to a physical preset before dispatch. With the default 14-button groups, group 2/button 1 maps to physical preset 15; a visual swap changes that mapping without moving camera presets. Scene-source requests must preserve their OBS dispatch order and must not coalesce repeated preset recalls: a later source may intentionally move the camera again, including back to an earlier preset. Serialize this plugin's own protocol transactions as required by the driver. Camera access is not reserved exclusively for this plugin; SimpleCamQt and the camera web interface remain independent clients, with no global ordering guarantee across clients.
 
 The table is the initial scope requested for the product, not a claim that every camera supports every function. Inquiry/status actions, exposure controls beyond backlight, and other vendor features remain outside the initial contract unless added deliberately.
 

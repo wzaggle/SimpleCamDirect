@@ -1,6 +1,6 @@
 # User guide plan
 
-The product name is **SimpleCam Direct**. Use this name consistently in future user-facing documentation, while distinguishing it from the existing SimpleCamQt desktop app and file-bridge plugin.
+The product name is **SimpleCam Direct**. Use this name consistently in future user-facing documentation, while distinguishing it from the existing SimpleCamQt desktop app and file-bridge plugin. The OBS dock for live control and preset management is called **Camera Control**; camera profiles and communication setup belong in a separate dock called **Cameras** (working label).
 
 The full user guide should be written against the implemented UI, not guessed in advance. The outline below defines the required coverage and gives coding agents a stable target for later user-facing documentation.
 

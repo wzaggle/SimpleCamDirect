@@ -14,6 +14,13 @@ Record for every row: SimpleCamQt result, SimpleCam Direct result, pass/fail, no
 - [ ] The camera web interface, SimpleCamQt, and SimpleCam Direct each move the camera successfully without requiring the other clients to exit or release ownership.
 - [ ] Repeated and consecutive Direct scene-source requests are all delivered to the Direct action service in OBS dispatch order; the final position matches the last Direct request.
 - [ ] SimpleCamQt and the web interface can also control the same camera, with no claim of global ordering across those separate clients.
+
+## Preset groups and source resolution
+
+- [ ] A scene preset source stores its camera, preset group, logical preset/button position, trigger mode, and delay.
+- [ ] With the default mapping, group 1/button 1 recalls physical preset 1 and group 2/button 1 recalls physical preset 15.
+- [ ] Visual preset swapping changes the saved group map and source resolution without rewriting camera preset locations.
+- [ ] Scene source labels remain clear after changing group or visual order; renaming and duplicate-source behavior still work.
 - [ ] Repeated requests are not merged or deduplicated, including when two consecutive entries select the same preset.
 
 ## Direct camera controls

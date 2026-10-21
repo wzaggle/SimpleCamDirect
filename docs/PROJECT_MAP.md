@@ -13,9 +13,9 @@ The existing native SimpleCam OBS plugin is a proven reference for source behavi
 | Component | Responsibility | Owns |
 |---|---|---|
 | OBS integration | Register sources, docks, properties, hotkeys, lifecycle callbacks, scene/preview/program events | OBS API boundary and serialized source settings |
-| Preset source | Store camera identity, logical preset id, display/action mode, and delay; call the shared camera action service | Per-scene source configuration and source-name presentation |
-| Camera dock | Select and operate configured camera cards through the same camera action service; show current connection/error state; offer reorder/swap/manage actions; use exact OBS styling while docked and optional SimpleCam Classic styling only while floating | Temporary control state plus a separate floating-appearance preference |
-| Camera configuration | Add/edit/disable cameras, select profile and transport, validate connection settings, run a connection test | Per-install camera configuration |
+| Preset source | Keep the existing OBS source-property workflow; store camera, preset group, logical preset/button position, trigger mode, and delay; resolve the selected group/map and call the shared action service | Per-scene source configuration and source-name presentation |
+| Camera Control dock | Provide SimpleCamQt-style live controls and preset buttons; Settings mode retains preset naming and visual button swapping; call the same action service as preset sources | Temporary control state, preset names/maps, and floating-appearance preference |
+| Cameras dock | Add/edit/disable cameras, select profile and communication protocol, configure endpoints and serial parameters, validate settings, and test a connection | Per-install camera configuration |
 | Profile catalog | Discover JSON and `.camera.cfg` profile files, validate schema and compatibility, de-duplicate ids, expose eligible profiles | Immutable profile records and validation diagnostics |
 | Profile editor | Inspect and customize a profile in a draft workspace, validate typed command sequences, test against a selected camera, save user profiles or Save As | Draft edits, validation results, and explicit test authorization |
 | Camera action service | Accept semantic actions (pan, stop, zoom, recall preset, store preset, etc.); preserve ordering and per-camera serialization | Queue, state, cancellation and acknowledgements |
@@ -38,7 +38,7 @@ flowchart TD
     E --> B
     B --> H[Status and diagnostics]
     H --> A
-    I[Camera configuration window] --> J[Saved camera connection]
+    I[Cameras dock] --> J[Saved camera connection]
     J --> F
     K[Profile JSON directory] --> D
 ```
@@ -47,13 +47,14 @@ This is a logical map, not a threading diagram. The implementation must keep pot
 
 ## Main data contracts
 
-1. **Source action:** OBS source id + configured camera id + logical preset id + trigger mode + delay; source callbacks submit it directly to the shared in-process action service.
+1. **Source action:** OBS source id + configured camera id + preset group + logical preset/button position + trigger mode + delay; source callbacks submit it directly to the shared in-process action service.
 2. **Camera action:** a typed operation and parameters, not a raw byte string from UI code. Dock buttons submit the same action types through the same service.
-3. **Initial action set:** home, four-direction pan/tilt, zoom in/out and absolute zoom, preset store/recall, focus auto/manual and near/far, white balance auto/manual, backlight behavior, and camera power/standby. See `CAMERA_ACTION_CONTRACT.md` for speed and protocol boundaries.
-4. **Profile:** model-specific metadata, supported capabilities, protocol bindings, transport variants, value constraints, evidence, and verification status.
-5. **Transport result:** accepted/sent, protocol acknowledgement, completion or result, timeout, rejection, or transport failure.
-6. **Diagnostic event:** timestamp, correlation id, camera/profile id, operation, layer, result, and redacted details.
-7. **Profile edit:** base profile id/version + draft changes + target camera/connection variant + validation state. A draft is not active until it passes validation and the user applies it.
+3. **Preset resolution:** a preset source stores its group and logical button position. The service resolves the group's visual map to a physical camera slot; with the default 14-button mapping, group 2/button 1 resolves to physical preset 15. Visual swaps change the mapping, not the camera's stored presets.
+4. **Initial action set:** home, four-direction pan/tilt, zoom in/out and absolute zoom, preset store/recall, focus auto/manual and near/far, white balance auto/manual, backlight behavior, and camera power/standby. See `CAMERA_ACTION_CONTRACT.md` for speed and protocol boundaries.
+5. **Profile:** model-specific metadata, supported capabilities, protocol bindings, transport variants, value constraints, evidence, and verification status.
+6. **Transport result:** accepted/sent, protocol acknowledgement, completion or result, timeout, rejection, or transport failure.
+7. **Diagnostic event:** timestamp, correlation id, camera/profile id, operation, layer, result, and redacted details.
+8. **Profile edit:** base profile id/version + draft changes + target camera/connection variant + validation state. A draft is not active until it passes validation and the user applies it.
 
 ## Target repository map
 

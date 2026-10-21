@@ -1,8 +1,8 @@
-# Camera dock appearance and theming
+# Camera Control dock appearance and theming
 
 ## Goal
 
-The camera controls should work as an OBS dock whether docked in the main frame or detached as a floating window. When docked, the full control surface follows the active OBS theme exactly; do not apply SimpleCam-specific color overrides. When detached, the user may optionally give the dock content more of the familiar SimpleCam identity. Redocking immediately restores the exact OBS-themed appearance.
+The Camera Control surface should work as an OBS dock whether docked in the main frame or detached as a floating window. When docked, the full control surface follows the active OBS theme exactly; do not apply SimpleCam-specific color overrides. When detached, the user may optionally give the dock content more of the familiar SimpleCam identity. Redocking immediately restores the exact OBS-themed appearance. The separate Cameras dock follows OBS styling and contains profile and communication configuration.
 
 ## Appearance choices
 

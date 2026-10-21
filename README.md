@@ -15,7 +15,7 @@ Keep the hardware inexpensive, lightweight, and durable. Make the software prett
 - Keep the proven named, scene-embedded preset source workflow.
 - Move camera commands into the OBS plugin so scene actions can command a camera directly.
 - Keep a compact, detachable OBS dock for live camera operation and camera cards.
-- Put camera communication setup in its own configuration window.
+- Put camera profiles and communication setup in a separate dock named **Cameras**; keep live operation and preset management in the **Camera Control** dock.
 - Load camera model profiles from JSON or JSON-formatted `.camera.cfg` files, validate them, and add only valid compatible profiles to the supported-camera list.
 - Make the repository straightforward for people and coding agents to understand, build, test, and extend.
 - Establish behavior on Windows first; port that known behavior to Apple Silicon, then Linux.

@@ -21,7 +21,9 @@ Hardware should be inexpensive, lightweight, and durable. Software should be pre
 - AViPAS AV-1280W only.
 - Match the working SimpleCamQt + OBS Lua workflow before adding general camera-profile editing.
 - Scene-embedded preset sources retain named presets, camera/preset selection, preview/program/both behavior, delay, and clear source labels.
-- The OBS dock supports camera cards and live controls. Camera communication configuration belongs in a separate settings window.
+- The **Camera Control** dock follows the current SimpleCamQt control experience: camera cards, live movement, and preset buttons. Its existing Settings mode keeps preset naming and visual button swapping.
+- Camera model/profile selection and connection details belong in a separate dock named **Cameras** for now. It will cover brand/model, protocol, IP, port, serial port, baud, framing, and supported TCP/UDP choices as profiles require them. The UI can be renamed later.
+- Each OBS preset source stores its own selected preset group and logical preset/button position. The action service resolves that selection through the group's visual map before recalling a physical camera preset. With 14 buttons per group and the default map, group 2/button 1 resolves to physical preset 15; visual swaps update the map without physically moving stored camera presets.
 - Compare SimpleCamQt and SimpleCam Direct side by side during testing. SimpleCam Direct's dock and scene sources are one plugin and share one in-process action service; they do not communicate with each other through files or another IPC mechanism.
 
 ## Shared in-process action path and independent clients
