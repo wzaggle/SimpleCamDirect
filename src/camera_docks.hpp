@@ -10,6 +10,7 @@ class QLineEdit;
 class QPushButton;
 class QSlider;
 class QSpinBox;
+class QToolButton;
 class QTimer;
 
 namespace simplecam {
@@ -38,8 +39,8 @@ private:
 	QPushButton *pageButton_ = nullptr;
 	QLabel *pageDescription_ = nullptr;
 	QLineEdit *pageDescriptionEdit_ = nullptr;
-	QPushButton *addPageButton_ = nullptr;
-	QPushButton *removePageButton_ = nullptr;
+	QToolButton *addPageButton_ = nullptr;
+	QToolButton *removePageButton_ = nullptr;
 	QPushButton *settingsButton_ = nullptr;
 	QVector<QPushButton *> presetButtons_;
 	QPushButton *setButton_ = nullptr;

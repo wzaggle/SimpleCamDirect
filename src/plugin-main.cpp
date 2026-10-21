@@ -5,6 +5,7 @@
 #include <obs-frontend-api.h>
 #include <obs-module.h>
 #include <plugin-support.h>
+#include <util/base.h>
 
 #include <QDir>
 #include <QFileInfo>

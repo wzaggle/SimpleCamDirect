@@ -2,8 +2,11 @@
 
 #include "camera_runtime.hpp"
 
+#include <plugin-support.h>
+
 #include <obs-frontend-api.h>
 #include <obs-module.h>
+#include <util/base.h>
 
 #include <algorithm>
 #include <cstdint>
@@ -47,7 +50,7 @@ void refreshSourceName(PresetSourceData *data)
 
 void sourceUpdate(void *opaque, obs_data_t *settings);
 
-PresetSourceData *sourceCreate(obs_data_t *settings, obs_source_t *source)
+void *sourceCreate(obs_data_t *settings, obs_source_t *source)
 {
 	auto *data = new PresetSourceData;
 	data->source = source;

@@ -307,7 +307,7 @@ void CameraControlDock::handlePresetButton(int slotIndex)
 	const int pageIndex = runtime_.activePage();
 	const auto slot = runtime_.presets().slot(pageIndex, slotIndex);
 	switch (mode_) {
-	case Mode::Set:
+	case Mode::Set: {
 		if (slot.physicalPreset > 0) {
 			const auto answer = QMessageBox::question(
 				this, QStringLiteral("Overwrite camera preset?"),
@@ -331,6 +331,7 @@ void CameraControlDock::handlePresetButton(int slotIndex)
 		});
 		setMode(Mode::Recall);
 		return;
+	}
 	case Mode::Rename: {
 		bool accepted = false;
 		const QString current = slot.label;
@@ -366,7 +367,7 @@ void CameraControlDock::handlePresetButton(int slotIndex)
 		setStatus(QStringLiteral("Button label cleared; camera preset was not erased"));
 		setMode(Mode::Recall);
 		return;
-	case Mode::Recall:
+	case Mode::Recall: {
 		if (!runtime_.presets().hasUsablePreset(pageIndex, slotIndex)) {
 			setStatus(QStringLiteral("This button has no physical preset assigned"), true);
 			return;
@@ -381,6 +382,7 @@ void CameraControlDock::handlePresetButton(int slotIndex)
 				self->flashPresetButton(slotIndex);
 		});
 		return;
+	}
 	}
 }
 

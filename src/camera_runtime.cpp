@@ -1,6 +1,7 @@
 #include "camera_runtime.hpp"
 
 #include <plugin-support.h>
+#include <util/base.h>
 
 #include <QAbstractSocket>
 #include <QMetaObject>
