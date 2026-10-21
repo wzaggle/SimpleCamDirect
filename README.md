@@ -20,7 +20,7 @@ It does not yet claim camera compatibility or replace the proven SimpleCamQt pro
 
 1. Extract the project folder under your Visual Studio `repos` directory.
 2. In Visual Studio, choose **File → Open → Folder** and open the folder containing this `README.md` and `CMakeLists.txt`.
-3. Select the `windows-x64` CMake configure preset and the `Debug` configuration.
+3. Select the `windows-x64` CMake configure preset and the `RelWithDebInfo` configuration when building a plugin to load into the installed OBS application. Use `Debug` only when debugging against matching Debug OBS/Qt runtime DLLs.
 4. Build the `simplecamdirect` target. Build and run `simplecamdirect_packet_tests` or run the `windows-debug` CTest preset for packet tests.
 
 The first CMake configure downloads the pinned OBS 32.2.1 sources and OBS build dependencies, then builds the OBS frontend API needed by the docks. That setup takes much longer than an ordinary plugin build, and Visual Studio may appear idle while it runs. Build output is kept under `out/build/windows-x64`; downloads are kept under `.deps` and are not part of the source package.
@@ -28,7 +28,7 @@ The first CMake configure downloads the pinned OBS 32.2.1 sources and OBS build 
 To stage a local install without writing to the system OBS plugin directory:
 
 ```powershell
-cmake --install out/build/windows-x64 --prefix out/install --config Debug
+cmake --install out/build/windows-x64 --prefix out/install --config RelWithDebInfo
 ```
 
 After closing OBS, copy `out/install/simplecamdirect` to:
@@ -38,6 +38,8 @@ After closing OBS, copy `out/install/simplecamdirect` to:
 ```
 
 Reopen OBS and check **View → Docks** for Camera Control and Cameras. The plugin has a distinct native source id, `simplecamdirect_preset`; it does not reuse the legacy Lua source id.
+
+If OBS logs `LoadLibrary failed` with Windows error 126, Windows found the plugin DLL but could not find one of its required DLL dependencies. A Debug build can depend on Debug Qt DLLs (with a `d` suffix) that are not shipped with the normal OBS application. Rebuild and install `RelWithDebInfo`, then fully restart OBS.
 
 ## First camera test
 
