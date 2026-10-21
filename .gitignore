@@ -1,13 +1,26 @@
-# Build outputs
-build/
-build-*
-out/
-cmake-build-*/
-.vs/
-.vscode/
+# CMake and IDE output
+/build_*/
+/out/
+/cmake/.CMakeBuildNumber
+/CMakeUserPresets.json
+/.vs/
+*.suo
+*.user
+*.VC.db
+*.VC.opendb
 
-# IDE / OS noise
+# Downloaded OBS build dependencies
+/.deps/
+
+# Test and packaging output
+/Testing/
+/release/
+*.zip
+*.7z
+*.dmp
+*.log
+*.lock.json
+
+# OS metadata
 .DS_Store
 Thumbs.db
-*.user
-*.suo

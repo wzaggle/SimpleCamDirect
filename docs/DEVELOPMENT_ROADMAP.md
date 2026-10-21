@@ -10,6 +10,8 @@ The version labels below are planning markers, not release commitments.
 
 **Scope:** Windows only; one AViPAS AV-1280W; its proven VISCA connection and commands; no generic profile editor or camera-profile library UI.
 
+**Implementation status (2026-10-21):** the first code pass now contains the Windows CMake/Visual Studio scaffold, Camera Control and Cameras docks, a native preset source, asynchronous TCP VISCA queue, and packet fixtures. It has not yet been compiled in Windows/OBS or tested against the camera. The current UI is a deliberately reduced first vertical slice: advanced focus/white-balance and camera power controls remain unimplemented. This is not yet an exit-gate or release claim.
+
 Deliver one OBS plugin that can replace the current SimpleCamQt-plus-OBS-Lua workflow for this camera:
 
 - Camera Control dock with the direct controls and named presets users rely on. Keep preset naming and visual button swapping in its Settings mode.

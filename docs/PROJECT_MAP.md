@@ -96,6 +96,21 @@ tests/
 
 This layout is a starting map. Match the OBS plugin template's real build structure when implementation starts; do not force the template into this tree if it harms its build/package conventions.
 
+## Current first-pass code map
+
+The initial implementation follows the OBS plugin template layout while keeping the camera path compact:
+
+| Path | Current responsibility |
+|---|---|
+| `src/plugin-main.cpp` | OBS module lifecycle, dock registration, and Program/Preview scene-change dispatch |
+| `src/preset_source.cpp` | Distinct `simplecamdirect_preset` source, source properties/name refresh, and ordered scene-item dispatch |
+| `src/camera_docks.cpp` | Camera Control and Cameras Qt docks, preset-page editing, movement buttons, and connection form |
+| `src/camera_runtime.cpp` / `.hpp` | Persistent camera/preset settings, logical-to-physical mapping, asynchronous TCP queue, and semantic camera actions |
+| `src/visca_packets.hpp` | Initial AViPAS-target VISCA packet builders |
+| `tests/visca_packets_test.cpp` | Byte-for-byte packet fixtures runnable without OBS |
+
+This is the 0.1.0 Windows vertical slice, not yet the future multi-profile architecture described above. Windows compilation, OBS runtime behavior, and real-camera behavior still require the maintainer's test machine and AViPAS camera.
+
 ## Deliberate boundaries
 
 - Profiles declare what a model supports; drivers implement protocol semantics. JSON must not become a second programming language.
@@ -107,10 +122,8 @@ This layout is a starting map. Match the OBS plugin template's real build struct
 - Named preset source behavior should not be coupled to camera card layout, so a dock can be changed without breaking saved scenes.
 - Device discovery and source-name refresh are independent from camera motion; failure to refresh labels must not accidentally trigger a move.
 
-## Open design decisions to resolve before feature implementation
+## Remaining design decisions for later milestones
 
-- New source id versus migration of existing `Camera_Preset2` scene sources.
-- Whether preset groups are device-native banks, plugin-side logical labels, or both. Keep logical visual order distinct from physical preset slot numbers.
 - Which profile directories are built-in and user-writable on each OS; define precedence and duplicate-id rules across catalog sources.
 - Exact profile editor control layout and the final structured schema for VISCA multi-step command sequences, including ACK/completion barriers and per-step parameter constraints.
 - Which command operations require a query/ack before proceeding and which can safely be fire-and-forget.

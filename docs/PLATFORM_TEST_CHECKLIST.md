@@ -2,6 +2,14 @@
 
 Use this checklist to locate a failure at the right layer: OBS/plugin load, profile/configuration, protocol, transport, camera behavior, or scene-event logic. A working web page only proves that the camera's web service works; it does not prove the selected PTZ control protocol, port, framing, or credentials are correct.
 
+## SimpleCam Direct 0.1.0 first-pass status (2026-10-21)
+
+- Windows x64 CMake/Visual Studio build: **not run in this workspace**.
+- OBS 32.2.1 plugin load and dock/source registration: **not run**.
+- VISCA packet fixture tests: **passed locally** with GCC 13.3.0; these test packet bytes only.
+- AViPAS AV-1280W transport and real-camera actions: **not run in this pass**.
+- macOS and Linux: **out of scope for the Windows first pass**.
+
 ## Test record header
 
 Capture this before each test run:
