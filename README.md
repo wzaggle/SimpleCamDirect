@@ -24,14 +24,14 @@ Keep the hardware inexpensive, lightweight, and durable. Make the software prett
 
 - [`AGENTS.md`](AGENTS.md) — root instructions for coding agents and contributors.
 - [`docs/PROJECT_MAP.md`](docs/PROJECT_MAP.md) — logical components and interactions.
-- [`docs/PROJECT_DECISIONS.md`](docs/PROJECT_DECISIONS.md) — agreed project identity, first milestones, coexistence behavior, platform direction, and coding-agent expectations.
+- [`docs/PROJECT_DECISIONS.md`](docs/PROJECT_DECISIONS.md) — agreed project identity, first milestones, shared action path, platform direction, and coding-agent expectations.
 - [`docs/CAMERA_PROFILE_REVIEW.md`](docs/CAMERA_PROFILE_REVIEW.md) — vendor-document comparison and profile design requirements.
 - [`docs/CAMERA_PROFILE_EDITOR.md`](docs/CAMERA_PROFILE_EDITOR.md) — in-plugin profile editing, safe command testing, and Save As behavior.
 - [`docs/CAMERA_ACTION_CONTRACT.md`](docs/CAMERA_ACTION_CONTRACT.md) — initial semantic camera functions and protocol-mapping boundary.
 - [`docs/PROFILE_VARIABLES.md`](docs/PROFILE_VARIABLES.md) — constrained command-template placeholders, typed variable library, VISCA example, and future ONVIF form.
 - [`docs/PROTOCOL_EVOLUTION.md`](docs/PROTOCOL_EVOLUTION.md) — staged VISCA, ONVIF, and NDI implementation plan with compatibility and regression gates.
 - [`docs/DEVELOPMENT_ROADMAP.md`](docs/DEVELOPMENT_ROADMAP.md) — phased 0.1.x AViPAS milestone through generic engine, profile editor, ONVIF, additional cameras, and beta testing.
-- [`docs/SIMPLECAMQT_PARITY_CHECKLIST.md`](docs/SIMPLECAMQT_PARITY_CHECKLIST.md) — side-by-side behavior and coexistence test for the first native plugin milestone.
+- [`docs/SIMPLECAMQT_PARITY_CHECKLIST.md`](docs/SIMPLECAMQT_PARITY_CHECKLIST.md) — side-by-side behavior and shared-action-path test for the first native plugin milestone.
 - [`docs/UI_THEMING.md`](docs/UI_THEMING.md) — detachable OBS dock appearance choices for SimpleCam Classic and Match OBS modes.
 - [`schemas/camera-profile.schema.json`](schemas/camera-profile.schema.json) — draft JSON Schema for model profiles.
 - [`examples/profile-template.json`](examples/profile-template.json) — schema-valid teaching example; not a supported camera profile.

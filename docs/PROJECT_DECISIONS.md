@@ -22,18 +22,18 @@ Hardware should be inexpensive, lightweight, and durable. Software should be pre
 - Match the working SimpleCamQt + OBS Lua workflow before adding general camera-profile editing.
 - Scene-embedded preset sources retain named presets, camera/preset selection, preview/program/both behavior, delay, and clear source labels.
 - The OBS dock supports camera cards and live controls. Camera communication configuration belongs in a separate settings window.
-- Compare SimpleCamQt and SimpleCam Direct side by side in OBS while both remain usable.
+- Compare SimpleCamQt and SimpleCam Direct side by side during testing. SimpleCam Direct's dock and scene sources are one plugin and share one in-process action service; they do not communicate with each other through files or another IPC mechanism.
 
-## Coexistence and ordering
+## Shared in-process action path and independent clients
 
-- SimpleCamQt, SimpleCam Direct, and the camera's own web interface are independent valid clients and may command the same network camera. The plugin must not place an exclusive ownership lock on a network camera.
-- OBS executes scene sources in source-list order. Mixed SimpleCamQt/file-bridge and SimpleCam Direct actions must all execute in that order. Never suppress, merge, or deduplicate repeated preset recalls; a later action may intentionally move the camera again or back to an earlier preset.
-- Serialize this plugin's own protocol transactions where the selected driver requires it. This internal queue must preserve action order and must not impose exclusive camera ownership across independent clients.
+- SimpleCam Direct scene sources and its camera dock invoke the same in-process camera action service and per-camera queue. No files, sockets, or other IPC connect these plugin components.
+- SimpleCamQt, SimpleCam Direct, and the camera's own web interface remain independent valid clients and may command the same network camera. SimpleCam Direct must not place an exclusive ownership lock on a network camera. Separate clients are not globally serialized with each other; only Direct's own transactions are ordered by its queue.
+- OBS scene-source events are submitted to the Direct service in OBS dispatch order. Never suppress, merge, or deduplicate repeated Direct preset recalls; a later source may intentionally move the camera again or back to an earlier preset. Do not claim deterministic ordering between Direct and legacy/file-bridge requests from separate clients.
 - Serial-port sharing is platform/adapter dependent and is a separate OS-level limitation; it does not constrain TCP/IP camera clients.
 
 ## Planned milestones
 
-1. Windows + VISCA + AViPAS AV-1280W parity and coexistence testing.
+1. Windows + VISCA + AViPAS AV-1280W parity and side-by-side testing.
 2. Generic camera communication engine.
 3. Expand the profile JSON with per-camera command data using a typed variable/format library; rerun single-camera VISCA tests.
 4. Add a profile configuration editor and profile library that can validate, edit, save, and export JSON / `.camera.cfg` files.

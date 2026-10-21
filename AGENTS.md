@@ -22,8 +22,8 @@ Also inspect the current source, build files, tests, and git history before edit
 - Follow the product principle: hardware should be inexpensive, lightweight, and durable; software should be pretty, easy, and fully functional. Prefer useful, polished behavior over unnecessary feature or dependency weight.
 - Preserve the active milestone scope in `docs/DEVELOPMENT_ROADMAP.md`. The first deliverable is Windows + VISCA + AViPAS AV-1280W parity, with no general profile editor in that milestone.
 - Preserve scene-embedded named preset sources with camera selection, preset selection, preview/program/both behavior, delay, source-name clarity, and duplicate-source awareness unless an issue explicitly changes the behavior.
-- Keep scene-triggered camera requests direct and independent of a separate SimpleCamQt process.
-- Do not reserve a network camera exclusively for SimpleCam Direct. SimpleCamQt and the camera web interface remain valid command clients; preserve OBS source-list order and never coalesce repeated scene preset requests.
+- Scene sources and dock controls must call the same in-process camera action service and per-camera queue. Do not add file-based or other IPC between these plugin components, or depend on a separate SimpleCamQt process.
+- Do not reserve a network camera exclusively for SimpleCam Direct. SimpleCamQt and the camera web interface remain independent clients. Preserve Direct source dispatch order and never coalesce repeated scene preset requests; do not claim global ordering across separate clients.
 - Separate UI, high-level camera actions, profile/catalog loading, protocol drivers, and transport I/O.
 - Camera profiles are data. A JSON profile must never execute shell commands, scripts, arbitrary dynamic code, or unvalidated URLs.
 - Network transport, serial transport, VISCA, ONVIF, and NDI PTZ are distinct concerns. Do not assume that VISCA-over-TCP, VISCA-over-UDP, a VISCA-over-IP packet envelope, ONVIF, or NDI control are interchangeable.

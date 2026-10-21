@@ -20,8 +20,8 @@ Never put passwords, authentication tokens, public IPs, or sensitive network det
 ## Gate 0 — protect production behavior
 
 - [ ] Back up OBS profile and scene collection; first test in a copied OBS profile or disposable collection.
-- [ ] Keep the legacy SimpleCam Lua source and native source enabled together during coexistence tests; they must use distinct OBS source types while remaining able to command the same network camera.
-- [ ] Confirm there is only one registration for each OBS source id/type; distinct legacy and native source types are expected to coexist.
+- [ ] Test Direct scene sources and dock controls together; confirm both call the same action service and per-camera queue without file or IPC communication between them.
+- [ ] Confirm there is only one registration for each OBS source id/type. The Direct source id remains distinct from the legacy Lua/file-bridge source id.
 - [ ] Use a safe camera direction and low speed for first movement tests; confirm the camera is not supporting a live production shot.
 - [ ] Do not test power-off, reset, preset-clear, or preset-overwrite until the profile and destination camera are confirmed.
 
@@ -117,9 +117,9 @@ Run from a safe position; record each independently:
 - [ ] Test configured delay; verify whether Preview uses zero delay per the legacy contract and confirm the intended new behavior.
 - [ ] Rapid scene transitions do not queue stale moves or send unintended commands twice.
 - [ ] Scene collection save/reload preserves source configuration and camera association.
-- [ ] The legacy Lua/file-bridge source and the new native source type can coexist without sharing an OBS source id, settings key, or request-file behavior, while both can command the same network camera.
-- [ ] A mixed scene with legacy and native preset sources dispatches all requests in OBS source-list order, including repeated requests; verify the final camera position matches the last request.
-- [ ] The camera web page remains usable alongside both applications; no plugin-imposed exclusive camera ownership or command lock blocks it.
+- [ ] SimpleCamQt, the legacy Lua/file-bridge plugin, SimpleCam Direct, and the camera web page can independently command the same network camera without an exclusive ownership lock.
+- [ ] Direct scene actions preserve their own OBS dispatch order, including repeated requests. Do not treat operations from separate clients as globally ordered.
+- [ ] The camera web page remains usable alongside SimpleCamQt and SimpleCam Direct; no plugin-imposed exclusive camera ownership or command lock blocks it.
 - [ ] Reorder/swap visual positions changes the display mapping without changing physical preset slots unless the user explicitly chooses a physical preset operation.
 - [ ] An unavailable camera/source fails visibly and safely; no command is sent to a different camera as a fallback.
 

@@ -6,15 +6,15 @@ SimpleCam Direct should own the scene action and the physical-camera command pat
 
 Implementation is staged. The first target is a Windows-only VISCA vertical slice for the AViPAS AV-1280W, before generalized profile authoring, ONVIF, NDI, or external beta expansion. See [`DEVELOPMENT_ROADMAP.md`](DEVELOPMENT_ROADMAP.md).
 
-The existing native SimpleCam OBS plugin is a proven reference for source behavior, but it still writes request files for SimpleCamQt to consume. The new design removes that external command bridge. Do not confuse the existing source plugin's file protocol with the target architecture.
+The existing native SimpleCam OBS plugin is a proven reference for source behavior, but it writes request files for SimpleCamQt to consume. SimpleCam Direct removes that bridge entirely. Its OBS preset sources and camera dock call the same in-process camera action service; neither component sends requests to the other, and there is no source-to-dock or source-to-camera-I/O file protocol.
 
 ## Logical components
 
 | Component | Responsibility | Owns |
 |---|---|---|
 | OBS integration | Register sources, docks, properties, hotkeys, lifecycle callbacks, scene/preview/program events | OBS API boundary and serialized source settings |
-| Preset source | Store camera identity, logical preset id, display/action mode, and delay; trigger the selected action | Per-scene source configuration and source-name presentation |
-| Camera dock | Select and operate configured camera cards; show current connection/error state; offer reorder/swap/manage actions; use exact OBS styling while docked and optional SimpleCam Classic styling only while floating | Temporary control state plus a separate floating-appearance preference |
+| Preset source | Store camera identity, logical preset id, display/action mode, and delay; call the shared camera action service | Per-scene source configuration and source-name presentation |
+| Camera dock | Select and operate configured camera cards through the same camera action service; show current connection/error state; offer reorder/swap/manage actions; use exact OBS styling while docked and optional SimpleCam Classic styling only while floating | Temporary control state plus a separate floating-appearance preference |
 | Camera configuration | Add/edit/disable cameras, select profile and transport, validate connection settings, run a connection test | Per-install camera configuration |
 | Profile catalog | Discover JSON and `.camera.cfg` profile files, validate schema and compatibility, de-duplicate ids, expose eligible profiles | Immutable profile records and validation diagnostics |
 | Profile editor | Inspect and customize a profile in a draft workspace, validate typed command sequences, test against a selected camera, save user profiles or Save As | Draft edits, validation results, and explicit test authorization |
@@ -43,12 +43,12 @@ flowchart TD
     K[Profile JSON directory] --> D
 ```
 
-This is a logical map, not a threading diagram. The implementation must keep potentially blocking I/O off OBS UI/source callback threads and preserve one ordered command stream per physical camera.
+This is a logical map, not a threading diagram. The implementation must keep potentially blocking I/O off OBS UI/source callback threads and preserve one ordered command stream per physical camera. Sources and dock controls share that service and queue; there is no inter-component communication layer.
 
 ## Main data contracts
 
-1. **Source action:** OBS source id + configured camera id + logical preset id + trigger mode + delay.
-2. **Camera action:** a typed operation and parameters, not a raw byte string from UI code.
+1. **Source action:** OBS source id + configured camera id + logical preset id + trigger mode + delay; source callbacks submit it directly to the shared in-process action service.
+2. **Camera action:** a typed operation and parameters, not a raw byte string from UI code. Dock buttons submit the same action types through the same service.
 3. **Initial action set:** home, four-direction pan/tilt, zoom in/out and absolute zoom, preset store/recall, focus auto/manual and near/far, white balance auto/manual, backlight behavior, and camera power/standby. See `CAMERA_ACTION_CONTRACT.md` for speed and protocol boundaries.
 4. **Profile:** model-specific metadata, supported capabilities, protocol bindings, transport variants, value constraints, evidence, and verification status.
 5. **Transport result:** accepted/sent, protocol acknowledgement, completion or result, timeout, rejection, or transport failure.
