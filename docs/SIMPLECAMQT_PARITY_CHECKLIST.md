@@ -22,8 +22,9 @@ Record for every row: SimpleCamQt result, SimpleCam Direct result, pass/fail, no
 - [ ] The default sequential page map uses `Preview + ((Preview Group - 1) * 14)`; group 1/Preview 1 recalls physical preset 1 and group 2/Preview 1 recalls physical preset 15.
 - [ ] Changing Preview Group changes the physical slot recalled by the same source number; the user selects the group they intend.
 - [ ] The five default pages can distribute a camera's available physical presets in different mixes; unassigned slots are dimmed, disabled, and labeled `---`.
-- [ ] One page-description control advances through page names; no fixed row of page selector buttons is required.
-- [ ] Page-count `+`/`−` actions add/remove pages separately from page selection; `−` removes only empty pages above five.
+- [ ] The existing top `PG` button cycles pages; no selector radio buttons are added.
+- [ ] In Settings, `+` and trash are beside the active page-description field; trash is allowed only when all 14 labels are blank and at least five pages remain.
+- [ ] Settings Clear blanks a selected preset label without erasing the camera's preset; Set/Rename appear in Control, while Swap/Clear/Rename appear in Settings.
 - [ ] For capacity 25, presets can be distributed across all five pages; for capacity 255, 19 pages expose all presets.
 - [ ] Visual preset swapping and renaming retain the agreed behavior without physically rewriting camera presets.
 - [ ] Scene source labels remain clear after changing group or visual order; renaming and duplicate-source behavior still work.
