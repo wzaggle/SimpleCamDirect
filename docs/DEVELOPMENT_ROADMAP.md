@@ -15,7 +15,7 @@ Deliver one OBS plugin that can replace the current SimpleCamQt-plus-OBS-Lua wor
 - Camera Control dock with the direct controls and named presets users rely on. Keep preset naming and visual button swapping in its Settings mode.
 - Separate dock named Cameras for camera/profile and connection configuration; initially expose only the fields required for the AViPAS VISCA target.
 - Scene-embedded preset source with camera and logical preview selection (1–14); Program/Preview/Both behavior; delay; clear source naming; and duplicate-source handling. Source editing requests the preset names for the currently selected Preview Group; each source stores its preview number but not the group.
-- Preset naming, five default pages, visual order, and supported speed behavior needed for the current workflow. Allow additional 14-slot pages with `+` when camera capacity exceeds 70; `−` removes only empty pages above the default five.
+- Preset naming, five default pages, visual order, and supported speed behavior needed for the current workflow. Advance through page names with one page-description control instead of fixed page selector buttons. Keep `+`/`−` for adding/removing pages, with `−` limited to empty pages above the default five.
 - Camera setup limited to the settings required for this one Windows/VISCA/AViPAS target; no general profile authoring interface.
 - Direct camera commands through one in-process action service shared by the plugin's scene sources and camera dock. Keep SimpleCamQt and the legacy file-bridge plugin available for side-by-side comparison; SimpleCam Direct does not depend on either one.
 
