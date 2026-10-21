@@ -26,6 +26,11 @@ find_package(libobs REQUIRED)
 find_package(obs-frontend-api REQUIRED)
 find_package(Qt6 REQUIRED COMPONENTS Core Widgets Network)
 
+# plugin-support.c uses OBS's canonical logging declarations from util/base.h.
+if(TARGET plugin-support)
+  target_link_libraries(plugin-support PRIVATE OBS::libobs)
+endif()
+
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
   OBS::libobs
   OBS::obs-frontend-api
