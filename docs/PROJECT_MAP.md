@@ -13,7 +13,7 @@ The existing native SimpleCam OBS plugin is a proven reference for source behavi
 | Component | Responsibility | Owns |
 |---|---|---|
 | OBS integration | Register sources, docks, properties, hotkeys, lifecycle callbacks, scene/preview/program events | OBS API boundary and serialized source settings |
-| Preset source | Keep the existing OBS source-property workflow; store camera, preset group, logical preset/button position, trigger mode, and delay; resolve the selected group/map and call the shared action service | Per-scene source configuration and source-name presentation |
+| Preset source | Keep the existing OBS source-property workflow; store camera, logical preview number, trigger mode, and delay; request names from the currently selected group for editing; call the shared preview action service | Per-scene source configuration and source-name presentation |
 | Camera Control dock | Provide SimpleCamQt-style live controls and preset buttons; Settings mode retains preset naming and visual button swapping; call the same action service as preset sources | Temporary control state, preset names/maps, and floating-appearance preference |
 | Cameras dock | Add/edit/disable cameras, select profile and communication protocol, configure endpoints and serial parameters, validate settings, and test a connection | Per-install camera configuration |
 | Profile catalog | Discover JSON and `.camera.cfg` profile files, validate schema and compatibility, de-duplicate ids, expose eligible profiles | Immutable profile records and validation diagnostics |
@@ -47,9 +47,9 @@ This is a logical map, not a threading diagram. The implementation must keep pot
 
 ## Main data contracts
 
-1. **Source action:** OBS source id + configured camera id + preset group + logical preset/button position + trigger mode + delay; source callbacks submit it directly to the shared in-process action service.
+1. **Source action:** OBS source id + configured camera id + logical preview number + trigger mode + delay; source callbacks submit it directly to the shared in-process action service. The source does not store a preset group.
 2. **Camera action:** a typed operation and parameters, not a raw byte string from UI code. Dock buttons submit the same action types through the same service.
-3. **Preset resolution:** a preset source stores its group and logical button position. The service resolves the group's visual map to a physical camera slot; with the default 14-button mapping, group 2/button 1 resolves to physical preset 15. Visual swaps change the mapping, not the camera's stored presets.
+3. **Preset resolution:** while editing a source, the source UI requests the preset-name list for the currently selected Preview Group. At runtime it passes its saved 1–15 preview number to the preview action; that action reads the currently selected Preview Group and resolves the physical slot as `Preview + ((Preview Group - 1) * 15)`. The user is responsible for selecting the intended group. Group 2, Preview 1 therefore recalls physical preset 16.
 4. **Initial action set:** home, four-direction pan/tilt, zoom in/out and absolute zoom, preset store/recall, focus auto/manual and near/far, white balance auto/manual, backlight behavior, and camera power/standby. See `CAMERA_ACTION_CONTRACT.md` for speed and protocol boundaries.
 5. **Profile:** model-specific metadata, supported capabilities, protocol bindings, transport variants, value constraints, evidence, and verification status.
 6. **Transport result:** accepted/sent, protocol acknowledgement, completion or result, timeout, rejection, or transport failure.
