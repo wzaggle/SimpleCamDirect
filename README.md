@@ -12,7 +12,7 @@ The first implementation contains:
 - Five initial pages of 14 preset buttons, page cycling through **PG**, virtual button swapping, and persisted names/mappings.
 - Packet-construction tests for the documented VISCA actions used by this pass.
 
-The scene source fires when the selected Program or Preview scene changes, preserving the order in which its visible source entries appear in that scene. In Studio Mode off, the single current scene acts as Program, Preview, and Both. On scene collection load, the active scene's preset entries are also processed once.
+The scene source fires when the selected Program or Preview scene changes, preserving the order in which its visible source entries appear in that scene. Delayed recalls wait in the same camera queue, so a later source cannot overtake an earlier delayed request. In Studio Mode off, the single current scene acts as Program, Preview, and Both. On scene collection load, the active scene's preset entries are also processed once.
 
 It does not yet claim camera compatibility or replace the proven SimpleCamQt production workflow. The first test needs a Windows OBS 32.2.1 build and a real AViPAS AV-1280W.
 

@@ -125,7 +125,7 @@ Run from a safe position; record each independently:
 - [ ] Add a named preset source; choose camera, logical preset, and configured trigger mode.
 - [ ] Rename the source to confirm the displayed name clearly identifies camera and preset; duplicates are marked consistently.
 - [ ] Test Program-only, Preview-only, and Both using a copied scene.
-- [ ] Test configured delay; verify whether Preview uses zero delay per the legacy contract and confirm the intended new behavior.
+- [ ] Test configured delay and confirm a later source waits behind an earlier delayed request; verify Preview delay behavior against the intended new contract.
 - [ ] Rapid scene transitions do not queue stale moves or send unintended commands twice.
 - [ ] Scene collection save/reload preserves source configuration and camera association.
 - [ ] SimpleCamQt, the legacy Lua/file-bridge plugin, SimpleCam Direct, and the camera web page can independently command the same network camera without an exclusive ownership lock.

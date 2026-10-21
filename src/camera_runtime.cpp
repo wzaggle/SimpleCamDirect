@@ -260,7 +260,7 @@ void ViscaTcpTransport::setEndpoint(const QString &host, quint16 port, int camer
 	cameraAddress_ = cameraAddress;
 }
 
-void ViscaTcpTransport::enqueue(const QVector<FrameCommand> &commands, Completion completion)
+void ViscaTcpTransport::enqueue(const QVector<FrameCommand> &commands, Completion completion, int delayBeforeMs)
 {
 	if (commands.isEmpty()) {
 		if (completion)
@@ -268,7 +268,7 @@ void ViscaTcpTransport::enqueue(const QVector<FrameCommand> &commands, Completio
 		return;
 	}
 
-	Request request{commands, std::move(completion), 0};
+	Request request{commands, std::move(completion), 0, std::clamp(delayBeforeMs, 0, 600000)};
 	auto queueRequest = [this, request = std::move(request)]() mutable {
 		if (host_.isEmpty() || port_ == 0) {
 			if (request.completion)
@@ -329,6 +329,10 @@ void ViscaTcpTransport::startNextRequest()
 	current_ = queue_.dequeue();
 	current_.commandIndex = 0;
 	busy_ = true;
+	if (current_.delayBeforeMs > 0) {
+		QTimer::singleShot(current_.delayBeforeMs, this, [this]() { startCurrentCommand(); });
+		return;
+	}
 	startCurrentCommand();
 }
 
@@ -606,25 +610,18 @@ void CameraRuntime::recallLogicalPreset(int logicalButton, int delayMs, Completi
 		return;
 	}
 
-	const int delay = std::clamp(delayMs, 0, 600000);
-	auto recall = [this, logicalButton, completion = std::move(completion)]() mutable {
-		const int physical = resolvePhysicalPreset(activePage_, logicalButton - 1);
-		if (physical < 1) {
-			if (completion)
-				completion(false, QStringLiteral("This button has no usable camera preset mapping"));
-			return;
-		}
-		try {
-			sendPacket(makePresetRecall(cameraAddress_, physical), true, std::move(completion));
-		} catch (const std::exception &e) {
-			if (completion)
-				completion(false, QString::fromUtf8(e.what()));
-		}
-	};
-	if (delay == 0)
-		recall();
-	else
-		QTimer::singleShot(delay, this, std::move(recall));
+	const int physical = resolvePhysicalPreset(activePage_, logicalButton - 1);
+	if (physical < 1) {
+		if (completion)
+			completion(false, QStringLiteral("This button has no usable camera preset mapping"));
+		return;
+	}
+	try {
+		sendPacket(makePresetRecall(cameraAddress_, physical), true, std::move(completion), delayMs);
+	} catch (const std::exception &e) {
+		if (completion)
+			completion(false, QString::fromUtf8(e.what()));
+	}
 }
 
 void CameraRuntime::storeLogicalPreset(int pageIndex, int slotIndex, Completion completion)
@@ -647,9 +644,10 @@ void CameraRuntime::storeLogicalPreset(int pageIndex, int slotIndex, Completion 
 	}
 }
 
-void CameraRuntime::sendPacket(const ViscaPacket &packet, bool waitForCompletion, Completion completion)
+void CameraRuntime::sendPacket(const ViscaPacket &packet, bool waitForCompletion, Completion completion, int delayBeforeMs)
 {
-	transport_.enqueue({ViscaTcpTransport::FrameCommand{toByteArray(packet), waitForCompletion}}, std::move(completion));
+	transport_.enqueue({ViscaTcpTransport::FrameCommand{toByteArray(packet), waitForCompletion}}, std::move(completion),
+			    delayBeforeMs);
 }
 
 void CameraRuntime::writeCameraSettings()

@@ -72,7 +72,7 @@ public:
 	explicit ViscaTcpTransport(QObject *parent = nullptr);
 
 	void setEndpoint(const QString &host, quint16 port, int cameraAddress);
-	void enqueue(const QVector<FrameCommand> &commands, Completion completion = {});
+	void enqueue(const QVector<FrameCommand> &commands, Completion completion = {}, int delayBeforeMs = 0);
 	void testConnection(Completion completion);
 
 private:
@@ -80,6 +80,7 @@ private:
 		QVector<FrameCommand> commands;
 		Completion completion;
 		int commandIndex = 0;
+		int delayBeforeMs = 0;
 	};
 
 	void startNextRequest();
@@ -136,7 +137,7 @@ public:
 	void storeLogicalPreset(int pageIndex, int slotIndex, Completion completion = {});
 
 private:
-	void sendPacket(const ViscaPacket &packet, bool waitForCompletion, Completion completion);
+	void sendPacket(const ViscaPacket &packet, bool waitForCompletion, Completion completion, int delayBeforeMs = 0);
 	void writeCameraSettings();
 	int resolvePhysicalPreset(int pageIndex, int slotIndex) const;
 
