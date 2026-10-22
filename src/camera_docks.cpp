@@ -12,6 +12,9 @@
 #include <QComboBox>
 #include <QDockWidget>
 #include <QCursor>
+#include <QElapsedTimer>
+#include <QEvent>
+#include <QEasingCurve>
 #include <QFormLayout>
 #include <QFont>
 #include <QFontMetrics>
@@ -22,7 +25,9 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QLayout>
+#include <QLayoutItem>
 #include <QMessageBox>
+#include <QMoveEvent>
 #include <QPainter>
 #include <QPaintEvent>
 #include <QPalette>
@@ -35,11 +40,14 @@
 #include <QSlider>
 #include <QSpinBox>
 #include <QStyle>
+#include <QStyleOptionButton>
 #include <QTimer>
 #include <QToolButton>
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <atomic>
+#include <memory>
 #include <utility>
 
 namespace simplecam {
@@ -102,6 +110,105 @@ void logLayoutMetrics(const char *phase, int transition, int resizeRequest, cons
 		"hint=%dx%d min=%dx%d max=%dx%d",
 		phase, transition, resizeRequest, name, geometry.width(), geometry.height(), geometry.x(), geometry.y(), hint.width(), hint.height(),
 		minimum.width(), minimum.height(), maximum.width(), maximum.height());
+}
+
+void logPresetFadeWidgetState(const char *phase, unsigned long long sequence, qint64 elapsedMs, const char *path,
+			      const QWidget *widget)
+{
+	if (!widget)
+		return;
+	const QRect geometry = widget->geometry();
+	const QSize hint = widget->sizeHint();
+	const QSize minimumHint = widget->minimumSizeHint();
+	const QSize minimum = widget->minimumSize();
+	const QSize maximum = widget->maximumSize();
+	const QMargins margins = widget->contentsMargins();
+	const QSizePolicy policy = widget->sizePolicy();
+	const QFont font = widget->font();
+	const QString objectName = widget->objectName();
+	const QByteArray objectNameBytes = objectName.toUtf8();
+	const QByteArray className = QByteArray(widget->metaObject()->className());
+	int textLength = -1;
+	if (const auto *label = qobject_cast<const QLabel *>(widget))
+		textLength = label->text().size();
+	else if (const auto *button = qobject_cast<const QPushButton *>(widget))
+		textLength = button->text().size();
+	else if (const auto *lineEdit = qobject_cast<const QLineEdit *>(widget))
+		textLength = lineEdit->text().size();
+
+	obs_log(LOG_INFO,
+		"[SimpleCamDirect PresetFadeWidget] id=%llu phase=%s elapsed_ms=%lld path=%s class=%s name=\"%s\" "
+		"geom=(%d,%d %dx%d) hint=%dx%d minHint=%dx%d min=%dx%d max=%dx%d "
+		"policy=(%d,%d stretch=%d,%d hfw=%d) margins=(%d,%d,%d,%d) "
+		"font=(pt=%.1f px=%d bold=%d) text_len=%d visible=%d hidden=%d",
+		sequence, phase, static_cast<long long>(elapsedMs), path, className.constData(), objectNameBytes.constData(), geometry.x(),
+		geometry.y(), geometry.width(), geometry.height(), hint.width(), hint.height(), minimumHint.width(), minimumHint.height(),
+		minimum.width(), minimum.height(), maximum.width(), maximum.height(), static_cast<int>(policy.horizontalPolicy()),
+		static_cast<int>(policy.verticalPolicy()), policy.horizontalStretch(), policy.verticalStretch(), policy.hasHeightForWidth() ? 1 : 0,
+		margins.left(), margins.top(), margins.right(), margins.bottom(), font.pointSizeF(), font.pixelSize(), font.bold() ? 1 : 0,
+		textLength, widget->isVisible() ? 1 : 0, widget->isHidden() ? 1 : 0);
+}
+
+void logPresetFadeLayoutTree(const char *phase, unsigned long long sequence, qint64 elapsedMs, const QLayout *layout,
+			     const QString &path)
+{
+	if (!layout)
+		return;
+	const QRect geometry = layout->geometry();
+	const QSize hint = layout->sizeHint();
+	const QSize minimum = layout->minimumSize();
+	const QSize maximum = layout->maximumSize();
+	const QMargins margins = layout->contentsMargins();
+	const QByteArray pathBytes = path.toUtf8();
+	obs_log(LOG_INFO,
+		"[SimpleCamDirect PresetFadeLayout] id=%llu phase=%s elapsed_ms=%lld path=%s "
+		"geom=(%d,%d %dx%d) hint=%dx%d min=%dx%d max=%dx%d margins=(%d,%d,%d,%d) "
+		"spacing=%d enabled=%d constraint=%d count=%d",
+		sequence, phase, static_cast<long long>(elapsedMs), pathBytes.constData(), geometry.x(), geometry.y(), geometry.width(),
+		geometry.height(), hint.width(), hint.height(), minimum.width(), minimum.height(), maximum.width(), maximum.height(), margins.left(),
+		margins.top(), margins.right(), margins.bottom(), layout->spacing(), layout->isEnabled() ? 1 : 0,
+		static_cast<int>(layout->sizeConstraint()), layout->count());
+
+	for (int index = 0; index < layout->count(); ++index) {
+		QLayoutItem *item = layout->itemAt(index);
+		if (!item)
+			continue;
+		const QString itemPath = QStringLiteral("%1/%2").arg(path).arg(index);
+		if (QWidget *widget = item->widget()) {
+			const QByteArray itemPathBytes = itemPath.toUtf8();
+			logPresetFadeWidgetState(phase, sequence, elapsedMs, itemPathBytes.constData(), widget);
+			if (widget->layout())
+				logPresetFadeLayoutTree(phase, sequence, elapsedMs, widget->layout(), itemPath + QStringLiteral("/layout"));
+		} else if (QLayout *childLayout = item->layout()) {
+			logPresetFadeLayoutTree(phase, sequence, elapsedMs, childLayout, itemPath);
+		} else {
+			const QSize spacerHint = item->sizeHint();
+			const QByteArray itemPathBytes = itemPath.toUtf8();
+			obs_log(LOG_INFO,
+				"[SimpleCamDirect PresetFadeSpacer] id=%llu phase=%s elapsed_ms=%lld path=%s hint=%dx%d",
+				sequence, phase, static_cast<long long>(elapsedMs), itemPathBytes.constData(), spacerHint.width(), spacerHint.height());
+		}
+	}
+}
+
+void logPresetFadeLayoutSnapshot(const char *phase, unsigned long long sequence, const QElapsedTimer &clock, QWidget *card,
+				 QWidget *dock = nullptr)
+{
+	if (!card)
+		return;
+	const qint64 elapsedMs = clock.elapsed();
+	logPresetFadeWidgetState(phase, sequence, elapsedMs, "card", card);
+	logPresetFadeLayoutTree(phase, sequence, elapsedMs, card->layout(), QStringLiteral("card"));
+	const auto descendants = card->findChildren<QWidget *>();
+	for (int index = 0; index < descendants.size(); ++index) {
+		const QString path = QStringLiteral("descendant[%1]").arg(index);
+		const QByteArray pathBytes = path.toUtf8();
+		logPresetFadeWidgetState(phase, sequence, elapsedMs, pathBytes.constData(), descendants.at(index));
+	}
+	if (dock && dock != card) {
+		logPresetFadeWidgetState(phase, sequence, elapsedMs, "dock", dock);
+		logPresetFadeLayoutTree(phase, sequence, elapsedMs, dock->layout(), QStringLiteral("dock"));
+	}
 }
 
 QIcon directionIcon(const QString &resource)
@@ -181,6 +288,141 @@ protected:
 	}
 };
 
+class PresetFlashButton final : public QPushButton {
+public:
+	explicit PresetFlashButton(QWidget *parent = nullptr) : QPushButton(parent) {}
+
+	void setFlashColor(const QColor &color)
+	{
+		flashColor_ = color;
+		update();
+	}
+
+	void clearFlashColor()
+	{
+		if (!flashColor_.isValid())
+			return;
+		flashColor_ = QColor();
+		update();
+	}
+
+	QRect textBounds() const
+	{
+		QStyleOptionButton option;
+		initStyleOption(&option);
+		return style()->subElementRect(QStyle::SE_PushButtonContents, &option, this);
+	}
+
+protected:
+	void paintEvent(QPaintEvent *event) override
+	{
+		// Keep Qt's normal button rendering active throughout the fade. Only
+		// overlay color changes; text, border, and pressed-state geometry stay
+		// exactly as they are outside the animation.
+		QPushButton::paintEvent(event);
+		if (!flashColor_.isValid())
+			return;
+
+		QStyleOptionButton option;
+		initStyleOption(&option);
+		QPainter painter(this);
+		painter.setOpacity(0.88);
+		painter.fillRect(rect().adjusted(1, 1, -1, -1), flashColor_);
+		painter.setOpacity(1.0);
+
+		// The wash covers the original glyph, so redraw it using Qt's normal
+		// content rectangle and palette to keep its position and contrast.
+		const QRect textRect = style()->subElementRect(QStyle::SE_PushButtonContents, &option, this);
+		style()->drawItemText(&painter, textRect, Qt::AlignCenter, option.palette, isEnabled(), text(), QPalette::ButtonText);
+	}
+
+private:
+	QColor flashColor_;
+};
+
+
+const char *presetFadeEventName(QEvent::Type type)
+{
+	switch (type) {
+	case QEvent::Move: return "Move";
+	case QEvent::Resize: return "Resize";
+	case QEvent::LayoutRequest: return "LayoutRequest";
+	case QEvent::StyleChange: return "StyleChange";
+	case QEvent::Polish: return "Polish";
+	case QEvent::PolishRequest: return "PolishRequest";
+	case QEvent::ContentsRectChange: return "ContentsRectChange";
+	case QEvent::FontChange: return "FontChange";
+	case QEvent::DynamicPropertyChange: return "DynamicPropertyChange";
+	case QEvent::ParentChange: return "ParentChange";
+	case QEvent::LayoutDirectionChange: return "LayoutDirectionChange";
+	case QEvent::Show: return "Show";
+	case QEvent::Hide: return "Hide";
+	default: return nullptr;
+	}
+}
+
+class PresetFadeEventProbe final : public QObject {
+public:
+	PresetFadeEventProbe(QWidget *button, QWidget *card, QWidget *dock, unsigned long long sequence,
+			     QString origin, std::shared_ptr<QElapsedTimer> clock, QObject *parent)
+		: QObject(parent), button_(button), card_(card), dock_(dock), sequence_(sequence), origin_(std::move(origin)), clock_(std::move(clock))
+	{
+		if (card_)
+			card_->installEventFilter(this);
+		if (card_) {
+			const auto descendants = card_->findChildren<QWidget *>();
+			for (QWidget *child : descendants)
+				child->installEventFilter(this);
+		}
+		if (dock_ && dock_ != card_)
+			dock_->installEventFilter(this);
+	}
+
+protected:
+	bool eventFilter(QObject *watched, QEvent *event) override
+	{
+		const char *name = presetFadeEventName(event->type());
+		if (!name)
+			return QObject::eventFilter(watched, event);
+		QWidget *widget = qobject_cast<QWidget *>(watched);
+		if (!widget)
+			return QObject::eventFilter(watched, event);
+		const char *target = widget == button_ ? "button" : widget == card_ ? "card" : widget == dock_ ? "dock" : "child";
+		QString details;
+		if (event->type() == QEvent::Move) {
+			const auto *move = static_cast<QMoveEvent *>(event);
+			details = QStringLiteral(" old=(%1,%2) new=(%3,%4)")
+				   .arg(move->oldPos().x()).arg(move->oldPos().y()).arg(move->pos().x()).arg(move->pos().y());
+		} else if (event->type() == QEvent::Resize) {
+			const auto *resize = static_cast<QResizeEvent *>(event);
+			details = QStringLiteral(" old=%1x%2 new=%3x%4")
+				   .arg(resize->oldSize().width()).arg(resize->oldSize().height())
+				   .arg(resize->size().width()).arg(resize->size().height());
+		}
+		const QRect rect = widget->geometry();
+		const QPoint global = widget->mapToGlobal(QPoint(0, 0));
+		const QByteArray extra = details.toLatin1();
+		const QByteArray source = origin_.toUtf8();
+		obs_log(LOG_INFO,
+			"[SimpleCamDirect PresetFadeEvent] id=%llu origin=%s elapsed_ms=%lld target=%s event=%s "
+			"geom=(%d,%d %dx%d) global=(%d,%d) contents=(%d,%d %dx%d)%s",
+			sequence_, source.constData(), static_cast<long long>(clock_->elapsed()), target, name,
+			rect.x(), rect.y(), rect.width(), rect.height(), global.x(), global.y(), widget->contentsRect().x(),
+			widget->contentsRect().y(), widget->contentsRect().width(), widget->contentsRect().height(), extra.constData());
+		if (event->type() == QEvent::LayoutRequest && card_)
+			logPresetFadeLayoutSnapshot("layout-request", sequence_, *clock_, card_, dock_);
+		return QObject::eventFilter(watched, event);
+	}
+
+private:
+	QPointer<QWidget> button_;
+	QPointer<QWidget> card_;
+	QPointer<QWidget> dock_;
+	unsigned long long sequence_ = 0;
+	QString origin_;
+	std::shared_ptr<QElapsedTimer> clock_;
+};
+
 class ProtectedPowerButton final : public QPushButton {
 public:
 	explicit ProtectedPowerButton(QWidget *parent = nullptr) : QPushButton(QStringLiteral("Off"), parent) {}
@@ -195,7 +437,7 @@ protected:
 			return;
 		}
 		QPushButton::nextCheckState();
- 	}
+	}
 };
 
 void setButtonColor(QPushButton *button, const QColor &color)
@@ -351,7 +593,7 @@ void CameraControlCard::buildUi()
 	presetGrid->setHorizontalSpacing(0);
 	presetGrid->setVerticalSpacing(0);
 	for (int slot = 0; slot < PresetCatalog::SlotsPerPage; ++slot) {
-		auto *button = new QPushButton(this);
+		auto *button = new PresetFlashButton(this);
 		button->setMinimumSize(90, 34);
 		button->setFixedHeight(34);
 		button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
@@ -783,10 +1025,16 @@ void CameraControlCard::refresh()
 		button->setFixedHeight(34);
 		const auto &slot = runtime_->presets().slot(pageIndex, slotIndex);
 		const bool usable = runtime_->presets().hasUsablePreset(pageIndex, slotIndex);
-		button->setText(usable ? slot.label : QStringLiteral("---"));
+		// Names can be edited before a physical preset is assigned on newly added
+		// pages. Keep those names visible; reserve --- for an unnamed, unmapped slot.
+		button->setText(!slot.label.trimmed().isEmpty() || usable ? slot.label : QStringLiteral("---"));
 		button->setToolTip(usable ? QStringLiteral("Physical camera preset %1").arg(slot.physicalPreset)
 					    : QStringLiteral("No physical preset mapped"));
 		button->setEnabled(mode_ != Mode::Recall || usable);
+		// The flash color is painted on top of the button, so updating its base
+		// stylesheet during the flash does not interrupt the visible confirmation.
+		// Keeping every preset button on the same stylesheet also keeps their
+		// effective size limits consistent when OBS sends a style refresh.
 		setButtonColor(button, pendingSwapPage_ == pageIndex && pendingSwapSlot_ == slotIndex ? QColor(255, 244, 128)
 										 : pageColor(pageIndex));
 	}
@@ -870,7 +1118,9 @@ void CameraControlCard::handlePresetButton(int slotIndex)
 		if (accepted) {
 			runtime_->presets().setLabel(pageIndex, slotIndex, value);
 			refreshPresetSourceNames();
+			refresh();
 			setStatus(QStringLiteral("Preset name saved"));
+			flashPresetButton(slotIndex);
 		}
 		return;
 	}
@@ -881,13 +1131,21 @@ void CameraControlCard::handlePresetButton(int slotIndex)
 			setStatus(QStringLiteral("First position selected; use PG to change pages if needed"));
 			refresh();
 		} else {
-			if (runtime_->presets().swapSlots(pendingSwapPage_, pendingSwapSlot_, pageIndex, slotIndex)) {
+			const int firstPage = pendingSwapPage_;
+			const int firstSlot = pendingSwapSlot_;
+			const bool swapped = runtime_->presets().swapSlots(firstPage, firstSlot, pageIndex, slotIndex);
+			if (swapped) {
 				refreshPresetSourceNames();
 				setStatus(QStringLiteral("Visual preset positions swapped"));
 			}
 			pendingSwapPage_ = -1;
 			pendingSwapSlot_ = -1;
 			setMode(Mode::Recall);
+			if (swapped) {
+				if (firstPage == pageIndex)
+					flashPresetButton(firstSlot);
+				flashPresetButton(slotIndex);
+			}
 		}
 		return;
 	case Mode::Clear:
@@ -895,6 +1153,7 @@ void CameraControlCard::handlePresetButton(int slotIndex)
 		refreshPresetSourceNames();
 		setStatus(QStringLiteral("Button label cleared; camera preset was not erased"));
 		setMode(Mode::Recall);
+		flashPresetButton(slotIndex);
 		return;
 	case Mode::Recall: {
 		if (!runtime_->presets().hasUsablePreset(pageIndex, slotIndex)) {
@@ -903,40 +1162,177 @@ void CameraControlCard::handlePresetButton(int slotIndex)
 		}
 		setStatus(QStringLiteral("Moving to %1…").arg(slot.label));
 		QPointer<CameraControlCard> self(this);
-		runtime_->recallLogicalPreset(slotIndex + 1, 0, [self, slotIndex, label = slot.label](bool ok, const QString &message) {
+		runtime_->recallLogicalPreset(slotIndex + 1, 0, [self, label = slot.label](bool ok, const QString &message) {
 			if (!self)
 				return;
 			self->setStatus(ok ? QStringLiteral("Moved to %1").arg(label) : message, !ok);
-			if (ok)
-				self->flashPresetButton(slotIndex);
 		});
 		return;
 	}
 	}
 }
 
-void CameraControlCard::flashPresetButton(int slotIndex)
+void CameraControlCard::flashPresetButton(int slotIndex, const char *origin)
 {
 	if (slotIndex < 0 || slotIndex >= presetButtons_.size())
 		return;
+	const int pageIndex = runtime_->activePage();
+	const bool diagnosticTarget = cameraNumber_ == 1 && pageIndex == 0 && slotIndex == 0;
+	constexpr int fadeSteps = 19;
+	constexpr int frameIntervalMs = 67;
+	static std::atomic<unsigned long long> nextDiagnosticSequence{0};
+	const unsigned long long diagnosticSequence = diagnosticTarget ? nextDiagnosticSequence.fetch_add(1) + 1 : 0;
+	const auto fadeClock = std::make_shared<QElapsedTimer>();
+	fadeClock->start();
 	auto *button = presetButtons_.at(slotIndex);
-	setButtonColor(button, QColor(255, 244, 128));
-	if (!flashTimers_[slotIndex]) {
-		flashTimers_[slotIndex] = new QTimer(this);
-		flashTimers_[slotIndex]->setSingleShot(true);
-		QObject::connect(flashTimers_[slotIndex], &QTimer::timeout, this, [this]() { refresh(); });
+	auto *flashButton = static_cast<PresetFlashButton *>(button);
+	QWidget *dockWidget = parentWidget();
+	const auto logGeometry = [this, button, flashButton, dockWidget, diagnosticTarget, diagnosticSequence, origin, fadeClock, fadeSteps](
+																	const char *stage, const QColor &color, int fadeStep) {
+		if (!diagnosticTarget)
+			return;
+		const QRect buttonRect = button->geometry();
+		const QPoint buttonGlobal = button->mapToGlobal(QPoint(0, 0));
+		const QSize buttonHint = button->sizeHint();
+		const QRect contents = button->contentsRect();
+		const QRect textRect = flashButton->textBounds();
+		const QRect cardRect = geometry();
+		const QPoint cardGlobal = mapToGlobal(QPoint(0, 0));
+		const QRect cardLayoutRect = layout() ? layout()->geometry() : QRect();
+		const QRect dockRect = dockWidget ? dockWidget->geometry() : QRect();
+		const QPoint dockGlobal = dockWidget ? dockWidget->mapToGlobal(QPoint(0, 0)) : QPoint();
+		const QRect dockLayoutRect = dockWidget && dockWidget->layout() ? dockWidget->layout()->geometry() : QRect();
+		const QByteArray colorName = color.name().toLatin1();
+		const QByteArray originBytes = QByteArray(origin ? origin : "unknown");
+		obs_log(LOG_INFO,
+			"[SimpleCamDirect PresetFadeDiag] id=%llu origin=%s stage=%s elapsed_ms=%lld fade_step=%d/%d "
+			"group=1 button=1 button_local=(%d,%d %dx%d) button_global=(%d,%d) button_hint=%dx%d "
+			"contents=(%d,%d %dx%d) text_bounds=(%d,%d %dx%d) card_local=(%d,%d %dx%d) "
+			"card_layout=(%d,%d %dx%d) card_global=(%d,%d) dock_local=(%d,%d %dx%d) "
+			"dock_layout=(%d,%d %dx%d) dock_global=(%d,%d) color=%s",
+			diagnosticSequence, originBytes.constData(), stage, static_cast<long long>(fadeClock->elapsed()), fadeStep, fadeSteps,
+			buttonRect.x(), buttonRect.y(), buttonRect.width(), buttonRect.height(), buttonGlobal.x(), buttonGlobal.y(),
+			buttonHint.width(), buttonHint.height(), contents.x(), contents.y(), contents.width(), contents.height(),
+			textRect.x(), textRect.y(), textRect.width(), textRect.height(), cardRect.x(), cardRect.y(), cardRect.width(),
+			cardRect.height(), cardLayoutRect.x(), cardLayoutRect.y(), cardLayoutRect.width(), cardLayoutRect.height(),
+			cardGlobal.x(), cardGlobal.y(), dockRect.x(), dockRect.y(), dockRect.width(), dockRect.height(), dockLayoutRect.x(),
+			dockLayoutRect.y(), dockLayoutRect.width(), dockLayoutRect.height(), dockGlobal.x(), dockGlobal.y(), colorName.constData());
+	};
+
+	PresetFadeEventProbe *eventProbe = nullptr;
+	if (diagnosticTarget)
+		eventProbe = new PresetFadeEventProbe(button, this, dockWidget, diagnosticSequence,
+									QString::fromUtf8(origin ? origin : "unknown"), fadeClock, this);
+	if (diagnosticTarget)
+		logPresetFadeLayoutSnapshot("flash-start", diagnosticSequence, *fadeClock, this, dockWidget);
+
+	if (flashAnimations_[slotIndex]) {
+		flashAnimations_[slotIndex]->stop();
+		flashAnimations_[slotIndex]->deleteLater();
 	}
-	flashTimers_[slotIndex]->start(700);
+	// A queued OBS/Qt layout request can otherwise move the preset row while
+	// the yellow flash is visible. Hold this card's layout stable for the short
+	// animation, then perform one layout pass after the final color is painted.
+	if (!presetFlashLayoutFrozen_ && layout()) {
+		presetFlashLayoutWasEnabled_ = layout()->isEnabled();
+		if (presetFlashLayoutWasEnabled_)
+			layout()->setEnabled(false);
+		presetFlashLayoutFrozen_ = true;
+	}
+
+	// Twenty visible color states total: yellow at start plus nineteen fade steps.
+	// At 67 ms per step, the fade lasts about 1.27 seconds and stays below 15 FPS.
+	const QColor startColor(255, 255, 0);
+	const QColor endColor = pageColor(pageIndex);
+	logGeometry("before-start", endColor, -1);
+	auto *timer = new QTimer(this);
+	timer->setTimerType(Qt::PreciseTimer);
+	timer->setInterval(frameIntervalMs);
+	flashAnimations_[slotIndex] = timer;
+	if (eventProbe)
+		QObject::connect(timer, &QObject::destroyed, eventProbe, [eventProbe]() { eventProbe->deleteLater(); });
+
+	flashButton->setFlashColor(startColor);
+	logGeometry("frame", startColor, 0);
+	logGeometry("animation-start", startColor, 0);
+	auto fadeStep = std::make_shared<int>(0);
+	QObject::connect(timer, &QTimer::timeout, this,
+			 [this, timer, flashButton, slotIndex, pageIndex, fadeSteps, startColor, endColor, fadeStep, logGeometry,
+			  diagnosticTarget, diagnosticSequence, fadeClock, dockWidget]() {
+		++(*fadeStep);
+		const qreal linearProgress = static_cast<qreal>(*fadeStep) / fadeSteps;
+		const qreal progress = QEasingCurve(QEasingCurve::OutCubic).valueForProgress(linearProgress);
+		const QColor color = QColor::fromRgbF(startColor.redF() + (endColor.redF() - startColor.redF()) * progress,
+								       startColor.greenF() + (endColor.greenF() - startColor.greenF()) * progress,
+								       startColor.blueF() + (endColor.blueF() - startColor.blueF()) * progress,
+								       startColor.alphaF() + (endColor.alphaF() - startColor.alphaF()) * progress);
+		if (*fadeStep < fadeSteps)
+			flashButton->setFlashColor(color);
+		else
+			flashButton->clearFlashColor();
+		logGeometry("frame", color, *fadeStep);
+		if (*fadeStep < fadeSteps)
+			return;
+
+		timer->stop();
+		if (flashAnimations_[slotIndex] == timer) {
+			flashAnimations_[slotIndex] = nullptr;
+			// If the user changed groups during the flash, update only this
+			// button's base color instead of refreshing every preset button.
+			if (runtime_->activePage() != pageIndex) {
+				auto *presetButton = presetButtons_.at(slotIndex);
+				setButtonColor(presetButton, pageColor(runtime_->activePage()));
+			}
+		}
+		logGeometry("finished-before-layout-release", endColor, *fadeStep);
+		if (diagnosticTarget)
+			logPresetFadeLayoutSnapshot("before-layout-release", diagnosticSequence, *fadeClock, this, dockWidget);
+		releasePresetFlashLayoutIfIdle();
+		logGeometry("finished-after-layout-release", endColor, *fadeStep);
+		if (diagnosticTarget)
+			logPresetFadeLayoutSnapshot("after-layout-release", diagnosticSequence, *fadeClock, this, dockWidget);
+		timer->deleteLater();
+	});
+	timer->start();
+}
+
+void CameraControlCard::releasePresetFlashLayoutIfIdle()
+{
+	if (!presetFlashLayoutFrozen_)
+		return;
+	for (QTimer *timer : flashAnimations_) {
+		if (timer && timer->isActive())
+			return;
+	}
+
+	auto *cardLayout = layout();
+	if (cardLayout) {
+		cardLayout->setEnabled(presetFlashLayoutWasEnabled_);
+		if (presetFlashLayoutWasEnabled_) {
+			cardLayout->invalidate();
+			cardLayout->activate();
+		}
+	}
+	presetFlashLayoutFrozen_ = false;
 }
 
 void CameraControlCard::setStatus(const QString &message, bool error, int displayMs)
 {
-	statusLabel_->setText(message);
-	settingsPromptLabel_->setText(message);
-	QPalette palette = statusLabel_->palette();
-	palette.setColor(QPalette::WindowText, error ? QColor(190, 48, 48) : this->palette().color(QPalette::WindowText));
-	statusLabel_->setPalette(palette);
-	settingsPromptLabel_->setPalette(palette);
+	// Hidden labels are not the status display in the dock. Avoid changing
+	// their size hints on an OBS recall; the shared group/status line handles
+	// visible feedback and should not relayout the preset card.
+	if (!statusLabel_->isHidden()) {
+		statusLabel_->setText(message);
+		QPalette palette = statusLabel_->palette();
+		palette.setColor(QPalette::WindowText, error ? QColor(190, 48, 48) : this->palette().color(QPalette::WindowText));
+		statusLabel_->setPalette(palette);
+	}
+	if (!settingsPromptLabel_->isHidden()) {
+		settingsPromptLabel_->setText(message);
+		QPalette palette = settingsPromptLabel_->palette();
+		palette.setColor(QPalette::WindowText, error ? QColor(190, 48, 48) : this->palette().color(QPalette::WindowText));
+		settingsPromptLabel_->setPalette(palette);
+	}
 	if (statusHandler_)
 		statusHandler_(message, error, displayMs);
 }
@@ -1006,6 +1402,22 @@ CameraControlDock::CameraControlDock(CameraRuntime &camera1, CameraRuntime &came
 	camera2Card_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
 	camera1Card_->setCameraSelectionHandler([this](int cameraIndex) { selectCameraForCard(0, cameraIndex); });
 	camera2Card_->setCameraSelectionHandler([this](int cameraIndex) { selectCameraForCard(1, cameraIndex); });
+	const auto installRecallFeedback = [this](CameraRuntime &runtime) {
+		QPointer<CameraControlDock> self(this);
+		CameraRuntime *runtimePointer = &runtime;
+		runtime.setPresetRecallObserver([self, runtimePointer](int logicalButton, CameraRuntime::PresetRecallOrigin origin) {
+			if (!self || logicalButton < 1 || logicalButton > PresetCatalog::SlotsPerPage)
+				return;
+			for (CameraControlCard *card : {self->camera1Card_, self->camera2Card_}) {
+				if (card && card->runtime_ == runtimePointer) {
+					const char *originText = origin == CameraRuntime::PresetRecallOrigin::ObsSource ? "OBS-source" : "camera-control";
+					card->flashPresetButton(logicalButton - 1, originText);
+				}
+			}
+		});
+	};
+	installRecallFeedback(camera1);
+	installRecallFeedback(camera2);
 	sharedGroupToolsWidget_ = camera1Card_->groupToolsWidget_;
 	cardsLayout_->addWidget(camera1Card_, 1);
 	cardsLayout_->addWidget(camera2Card_, 1);
