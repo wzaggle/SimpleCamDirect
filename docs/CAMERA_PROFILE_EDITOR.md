@@ -6,30 +6,52 @@ The OBS plugin should include a profile editor so a user can tune an existing ca
 
 This is a product and safety contract for the later profile-editor milestone in [`DEVELOPMENT_ROADMAP.md`](DEVELOPMENT_ROADMAP.md). It does not imply the editor exists in the current SimpleCamQt or file-bridge plugin, or that it is part of the first SimpleCam Direct 0.1.x vertical slice.
 
+## OBS tool boundaries
+
+Keep three user-facing responsibilities distinct:
+
+- **Controls Dock:** live camera movement and preset management, including selecting which configured camera slot each card controls, preset groups, set/rename, and visual swap operations.
+- **Camera Selection Tool:** installation-specific setup for up to five camera slots. Assign one exact profile to a slot, enter only that camera's network or serial connection details, and test/retest the connection. It does not edit model command behavior.
+- **Camera Definition and Configuration Tool:** maintain reusable camera model profiles. Provide structured and direct JSON editing, validation, profile duplication, import/export, command testing, and optional startup-sequence editing.
+
+The Camera Selection Tool and Camera Definition and Configuration Tool are separate OBS Tools windows. They may link to each other, but profile data and installation connection data stay separate. The current Cameras dock is an interim implementation surface for the initial vertical slice; the target design moves installation selection/configuration to its tool and model-profile authoring to its own tool.
+
 ## Keep three kinds of data separate
 
 | Data | Example | Storage and edit behavior |
 |---|---|---|
 | Shipped model profile | Manufacturer/model, supported protocol variants, command bindings, capabilities (including default usable preset capacity) and evidence | Installed profile catalog; read-only in the editor |
 | User profile or custom variant | A tested adjustment to command steps or model quirks | User-writable camera profile directory; user may edit it or Save As another profile |
-| Camera instance settings | Camera name, IP/port, serial device, credentials, selected profile and connection variant, plus optional effective preset-capacity override | OBS user settings for that physical camera; never copied into a shared profile |
+| Camera slot settings | Slot number, display name, selected exact profile id, IP/port or serial device and serial framing/settings, credentials, and connection variant | OBS user settings for that installation slot; never copied into the reusable profile |
 
-There is one profile format for shipped and user-created profiles. A custom profile may be created for one physical camera, but it remains a normal reusable profile; the camera's address and other instance-specific settings are kept separately. The editor can be opened from a configured camera's profile selection or from the profile catalog. When editing a shipped profile, it creates a draft copy. **Save As** creates a distinct stable profile id and records the source profile id/version as its parent. It does not change the profile already selected by any camera. A user-owned profile may be saved in place only after validation; write it atomically and require explicit confirmation before changing a profile currently in use. Camera instances do not change profiles until the user explicitly applies one.
+There is one profile format for shipped and user-created profiles. If a model or firmware needs any capability or command exception, create a distinct profile (for example, duplicate AViPAS 1280 and save it as AViPAS 1280X). Do not add per-camera capability overrides. Camera addresses and other instance-specific settings remain in the slot configuration. The editor can be opened from the profile catalog or from the Camera Selection Tool. When editing a shipped profile, it creates a draft copy. **Save As** creates a distinct stable profile id and records the source profile id/version as its parent. It does not change the profile already selected by any slot. A user-owned profile may be saved in place only after validation; write it atomically and require explicit confirmation before changing a profile currently in use. Slots do not change profiles until the user explicitly applies one.
 
 ## Editor workflow
 
-1. **Choose a profile and connection variant.** Show exact manufacturer/model, firmware applicability, protocol, transport, framing, and profile maturity. Select the configured camera to use for hardware tests.
+1. **Choose a profile and test camera.** Show exact manufacturer/model, firmware applicability, protocol, transport variants, framing, and profile maturity. Select a configured slot in the Camera Selection Tool for hardware tests.
 2. **Create a draft.** Preserve the original profile. Show modified fields and retain provenance links and compatibility notes.
 3. **Edit supported operations.** Provide both a guided structured editor and a direct JSON editor. Both edit the same draft, show changes in the other view, and run identical syntax, schema, semantic, and safety validation. The structured editor can create a complete profile from scratch; advanced users and camera manufacturers can paste, import, or edit JSON directly.
 4. **Inspect encoding.** Show the effective parameter values, packet bytes or protocol request, transport framing, and expected reply behavior before sending. Make substitutions explicit and range checked.
 5. **Validate.** Run JSON syntax, schema, semantic, duplicate-id, driver/transport compatibility, value-range, sequence-reference, and safety checks. Errors identify the JSON path or operation and block saving/activation where required.
 6. **Simulate.** Render the sequence and expected response flow without sending to the camera. Simulation must be clearly labeled and must not raise the profile's hardware-test status.
-7. **Test on camera.** Require a selected camera, connection variant, and explicit per-test action. Send through the same serialized camera action service as normal control. Display each step's encoded request, send result, ACK/completion/reply, timeout, or failure. Do not bypass transport framing or response parsing.
+7. **Test on camera.** Require a selected slot, connection variant, and explicit per-test action. Send through the same serialized camera action service as normal control. Display each step's encoded request, send result, ACK/completion/reply, timeout, or failure. Do not bypass transport framing or response parsing.
 8. **Save or Save As.** Save a validated user profile atomically. Save As creates a new id, keeps source profile provenance, and starts at `draft` or `protocol-reviewed` according to its evidence; it cannot inherit `hardware-tested` or `maintained` status merely by copying metadata.
 9. **Apply explicitly.** Let the user choose which configured camera instance uses the saved profile. Do not switch a running camera instance or scene source silently.
 10. **Export/share.** Keep the profile in the local user catalog and allow export as a JSON-formatted `*.camera.cfg` file for sharing or manufacturer distribution. Also allow importing a selected `.camera.cfg` or `.json` file through the same validation and duplicate-id workflow. Export strips camera-instance addresses, serial device paths, credentials, and local test logs.
 
 The in-plugin authoring form starts with VISCA. Its first operation set is defined in [`CAMERA_ACTION_CONTRACT.md`](CAMERA_ACTION_CONTRACT.md); users map those functions to supported VISCA commands and sequences. VISCA command definitions may use fixed byte literals plus registered typed placeholders and output formats; see [`PROFILE_VARIABLES.md`](PROFILE_VARIABLES.md). ONVIF and NDI PTZ are later editor modes and remain limited to PTZ functions. Their forms use protocol-specific structured request fields (including NDI metadata structures) rather than asking users to enter VISCA-style raw hex or raw SOAP.
+
+## Optional startup sequence
+
+A camera profile may define an optional ordered sequence of setup operations for model features that SimpleCam Direct does not expose as regular Controls Dock actions. Examples include selecting a default speed or setting/clearing a vendor-specific feature. An empty or absent sequence is a no-op.
+
+- Run steps in order after the configured slot's camera connection becomes ready, including after reconnect; provide an explicit **Run startup sequence** action for deliberate reapplication.
+- Use only validated, driver-supported operations, typed values, the selected profile's normal transport, and the normal per-camera serialized queue. The sequence is data, never executable code or an unrestricted raw-packet escape hatch.
+- Prefer explicit state-setting operations over toggles so repeated startup runs converge on the same state.
+- Show each step's sent request and received reply (or `No reply expected`, timeout, or error) in the Camera Selection Tool. Report failures clearly and do not silently claim the profile was applied.
+- Startup operations configure the camera; they do not automatically create new buttons or semantic controls in the dock. A custom supported action is still a separate product/API design decision.
+
+The schema field names and exact step representation remain to be designed with the VISCA command sequence schema. This design decision does not imply the startup sequence is implemented in the current 0.1.x plugin.
 
 Implement those editor modes in protocol phases. Verify VISCA first against the AViPAS AV-1280W; then add ONVIF only if that camera advertises usable PTZ services, otherwise test ONVIF against another documented camera. Add NDI PTZ after that as a separate adapter. Every new adapter must pass its own tests and rerun all earlier protocol fixtures and hardware smoke tests. See [`PROTOCOL_EVOLUTION.md`](PROTOCOL_EVOLUTION.md) for phase gates and compatibility requirements.
 
