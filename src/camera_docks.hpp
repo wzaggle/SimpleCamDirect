@@ -38,7 +38,8 @@ private:
 	void refreshPageManagement();
 	void setMode(Mode mode);
 	void handlePresetButton(int slotIndex);
-	void flashPresetButton(int slotIndex);
+	void flashPresetButton(int slotIndex, const char *origin = "button-action");
+	void releasePresetFlashLayoutIfIdle();
 	void setStatus(const QString &message, bool error = false, int displayMs = 4000);
 	void sendPanTilt(int panDirection, int tiltDirection);
 	void sendStopPanTilt();
@@ -78,7 +79,9 @@ private:
 	QPushButton *exposureButton_ = nullptr;
 	QPushButton *powerButton_ = nullptr;
 	QTimer *homeDoubleClickTimer_ = nullptr;
-	QTimer *flashTimers_[14]{};
+	QTimer *flashAnimations_[14]{};
+	bool presetFlashLayoutFrozen_ = false;
+	bool presetFlashLayoutWasEnabled_ = false;
 	bool settingsMode_ = false;
 	bool groupToolsSuppressed_ = false;
 	bool pageDescriptionSuppressed_ = false;
