@@ -290,11 +290,21 @@ bool dispatchSceneItem(obs_scene_t *scene, obs_sceneitem_t *item, void *opaque)
 	const int cameraIndex = cameraIndexFromValue(obs_data_get_string(settings, "camera"));
 	obs_data_release(settings);
 	if (matches) {
-		if (CameraRuntime *runtime = cameraRuntime(cameraIndex))
+		if (CameraRuntime *runtime = cameraRuntime(cameraIndex)) {
+			if (cameraIndex == 0 && runtime->activePage() == 0 && preset == 1) {
+				obs_source_t *sceneSource = obs_scene_get_source(scene);
+				const char *sceneName = sceneSource ? obs_source_get_name(sceneSource) : "<unknown>";
+				const char *presetSourceName = obs_source_get_name(source);
+				obs_log(LOG_INFO,
+					"[SimpleCamDirect PresetFadeDiag] stage=obs-source-request camera=1 group=1 button=1 "
+					"scene=\"%s\" source=\"%s\" delay_ms=%d trigger_mode=%d",
+					sceneName ? sceneName : "<unknown>", presetSourceName ? presetSourceName : "<unknown>", delay, mode);
+			}
 			runtime->recallLogicalPreset(preset, delay, [preset](bool ok, const QString &message) {
 				if (!ok)
 					obs_log(LOG_WARNING, "SimpleCam Direct preset %d failed: %s", preset, message.toUtf8().constData());
-			});
+			}, CameraRuntime::PresetRecallOrigin::ObsSource);
+		}
 	}
 	return true;
 }
