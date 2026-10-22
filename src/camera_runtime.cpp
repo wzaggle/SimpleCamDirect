@@ -650,7 +650,7 @@ void CameraRuntime::setCameraPower(bool on, Completion completion)
 	sendPacket(makeCameraPower(cameraAddress_, on), true, std::move(completion));
 }
 
-void CameraRuntime::recallLogicalPreset(int logicalButton, int delayMs, Completion completion)
+void CameraRuntime::recallLogicalPreset(int logicalButton, int delayMs, Completion completion, PresetRecallOrigin origin)
 {
 	if (logicalButton < 1 || logicalButton > PresetCatalog::SlotsPerPage) {
 		if (completion)
@@ -664,12 +664,21 @@ void CameraRuntime::recallLogicalPreset(int logicalButton, int delayMs, Completi
 			completion(false, QStringLiteral("This button has no usable camera preset mapping"));
 		return;
 	}
+	// The flash confirms use of the mapped preset button. Camera movement and
+	// transport success are reported separately by the completion callback.
+	if (presetRecallObserver_)
+		presetRecallObserver_(logicalButton, origin);
 	try {
 		sendPacket(makePresetRecall(cameraAddress_, physical), true, std::move(completion), delayMs);
 	} catch (const std::exception &e) {
 		if (completion)
 			completion(false, QString::fromUtf8(e.what()));
 	}
+}
+
+void CameraRuntime::setPresetRecallObserver(PresetRecallObserver observer)
+{
+	presetRecallObserver_ = std::move(observer);
 }
 
 void CameraRuntime::storeLogicalPreset(int pageIndex, int slotIndex, Completion completion)
