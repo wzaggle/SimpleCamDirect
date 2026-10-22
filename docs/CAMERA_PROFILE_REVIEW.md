@@ -87,6 +87,8 @@ The editor should make profile development practical without turning JSON into a
 
 - Treat manufacturer/built-in profiles as read-only. Open a copy in a draft workspace and use **Save As** to create a user-owned profile with a new stable id.
 - Keep physical camera connection settings (IP, port, serial device, credentials) separate from reusable profile data. A user may select a customized profile for a particular configured camera without embedding its endpoint in the profile.
+- Keep profile exceptions in separate profile files. If a camera model/firmware needs a different capability, command, preset capacity, or zoom limit, duplicate the base profile as a distinct variant (for example, AViPAS 1280X); do not add a per-camera capability override.
+- Permit an optional ordered startup sequence for model-specific setup beyond the standard action controls. It is profile data made of validated driver operations and typed parameters, runs after connection readiness and on reconnect, and must use repeat-safe explicit state-setting commands.
 - Offer separate **Validate**, **Simulate/Preview**, and **Test on Camera** actions. Valid JSON is not proof that a command is valid or safe for a device.
 - Let users edit supported driver operations, parameters, and ordered command steps using protocol-aware fields; show the resulting encoded packet and response policy before transmission.
 - Test only against an explicitly selected camera and profile connection variant. Use confirmation for movement and stronger confirmation for preset overwrite, clear, power, or reset operations.
@@ -102,8 +104,9 @@ The schema in `schemas/camera-profile.schema.json` is an initial contract, not a
 | `identity` | stable id, manufacturer, model, aliases, hardware/firmware ranges |
 | `support` | maturity status, provenance, verification details |
 | `capabilities` | operations and constraints supported on this exact profile |
-| `connections[]` | serial/IP/SDK variants, framing, endpoint, serial settings, response behavior |
+| `connections[]` | supported serial/IP/SDK variants, framing, supported serial parameters and response behavior; the selected slot's actual IP, port, COM/device path and chosen connection values stay in OBS user settings |
 | `commands` | typed operation bindings and validated driver-specific data |
+| `startupSequence` (proposed) | optional ordered, typed, repeat-safe model setup steps; exact field/step schema remains open |
 | `notes` | safe user setup notes and known limitations |
 
 Before freezing v1, test the schema against actual profiles from at least: the user's AViPAS AV-1280W, a PTZOptics model with serial and network VISCA variants, a BirdDog model with its IP header, one Sony or Panasonic model, and an NDI PTZ adapter profile. Keep those as separate profiles where framing or capability differences exist.
@@ -118,7 +121,7 @@ Implement the protocol drivers incrementally: first VISCA on the user's AViPAS A
 
 1. Parse and validate all discovered files at startup.
 2. Build a catalog of eligible profiles plus diagnostics for rejected ones.
-3. Let camera configuration select a profile and connection variant; save only the profile id/version and user-specific endpoint/settings.
+3. Let the Camera Selection Tool assign an exact profile to a slot and save the profile id/version plus user-specific endpoint/settings. Let the Camera Definition and Configuration Tool maintain profile files separately.
 4. At execution, resolve typed action → declared capability → driver operation → transport frame.
 5. Log correlated state transitions without credentials.
 6. Revalidate profiles on explicit rescan/import; avoid hot-swapping a profile while an action is in flight.
