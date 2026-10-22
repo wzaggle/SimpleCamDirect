@@ -10,12 +10,20 @@ The version labels below are planning markers, not release commitments.
 
 **Scope:** Windows only; AViPAS AV-1280W over VISCA/TCP; no generic profile editor or camera-profile library UI. The first real hardware validation remains one physical camera. A second independent AViPAS slot is included now to exercise two-camera settings, source selection, and the Dual card layout; it is not a second model or a claim of multi-camera hardware testing.
 
+## Target OBS user-facing surfaces
+
+- **Controls Dock:** the in-use camera preset manager for camera-card selection, movement, preset recall/store, preset groups, naming, and visual ordering.
+- **Camera Selection Tool:** assigns one exact profile to each of up to five installation slots and stores that physical camera's network/serial connection details. It provides connection tests and status, not model command editing.
+- **Camera Definition and Configuration Tool:** a separate OBS Tools window for reusable profile JSON and structured editing, validation, duplicate/Save As, import/export, command tests, and optional startup-sequence authoring.
+
+The first vertical slice may keep its current Cameras dock as an interim setup surface. Generalized profile authoring and the three-surface target remain outside Milestone 1.
+
 **Implementation status (2026-10-21):** the Windows CMake/Visual Studio scaffold now contains independent Camera 1 and Camera 2 runtimes and settings, a Single/Dual Camera Control dock, a camera-selectable native preset source, asynchronous TCP VISCA queues, and packet fixtures. Camera 2 starts without an IP address. The updated plugin has not yet been compiled in Windows/OBS or tested against the camera; the added focus, BackLight, exposure compensation, and camera power controls also need hardware verification. This is not an exit-gate or release claim.
 
 Deliver one OBS plugin that can replace the current SimpleCamQt-plus-OBS-Lua workflow for this camera:
 
 - Camera Control dock with the direct controls and named presets users rely on. Keep preset naming and visual button swapping in its Settings mode.
-- Separate dock named Cameras for camera/profile and connection configuration; initially expose only the fields required for the AViPAS VISCA target.
+- The current implementation may use its interim Cameras dock for the AViPAS connection fields. The target design moves installation slot selection and connection settings to the Camera Selection Tool, while model/profile authoring belongs in the separate Camera Definition and Configuration Tool.
 - Scene-embedded preset source with camera and logical preview selection (1–14); Program/Preview/Both behavior; delay; clear source naming; and duplicate-source handling. Source editing requests the preset names for the currently selected Preview Group; each source stores its preview number but not the group.
 - Preset naming, five default pages, visual order, and supported speed behavior needed for the current workflow. In Settings, the visible Preset Group button cycles pages. Put `+` and trash beside the active page-description field; trash removes only a fully blank page when at least five pages remain. Put Clear beside Swap in Settings; Clear blanks a label without erasing the camera's stored preset. Control mode keeps Set/Rename; Settings provides Swap/Clear/Rename.
 - Camera setup limited to the settings required for this one Windows/VISCA/AViPAS target; no general profile authoring interface.
@@ -41,9 +49,9 @@ Initially create and validate the AViPAS profile directly as JSON. Do not requir
 
 **Exit gate:** the profile-driven AViPAS build produces the same packet bytes and action behavior as Milestone 2. Include schema-positive and negative fixtures, unsupported-action behavior, min/max/boundary value tests, and an AViPAS hardware test.
 
-## Milestone 4 — Camera profile editor and library; ONVIF trial
+## Milestone 4 — Camera Definition and Configuration Tool; ONVIF trial
 
-Add the profile catalog and editor for direct JSON and guided structured editing, validation, simulation, selected-camera testing, Save/Save As, import/export of `.camera.cfg`, and profile status/evidence. Keep user connection settings out of shareable model profiles.
+Add the profile catalog and Camera Definition and Configuration Tool for direct JSON and guided structured editing, validation, simulation, selected-slot testing, Save/Save As, import/export of `.camera.cfg`, and profile status/evidence. Include an optional ordered startup sequence using validated driver operations; run it when the selected slot's connection is ready and on reconnect, with sent/reply diagnostics and a manual reapply action. Keep user connection settings out of shareable model profiles. Build the Camera Selection Tool for mapping exact profiles into up to five slots and editing only per-installation connection details; do not expose per-camera capability overrides.
 
 Then test whether the AViPAS AV-1280W's exact firmware exposes usable ONVIF PTZ services. If it does, create an ONVIF configuration through the editor where practical and test the same semantic PTZ actions. If it does not, document the discovery result and use another camera for ONVIF testing rather than implying support.
 
