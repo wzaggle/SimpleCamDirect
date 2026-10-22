@@ -21,3 +21,17 @@
 
 - The checkpoint does not claim dual physical-camera hardware validation or support for protocols beyond the existing VISCA/TCP path.
 - Serial, ONVIF, NDI, and camera profile editing remain future work.
+
+
+## 2026-10-22 — Preset flash layout and color
+
+### Changes
+
+- Keep preset flash color painting independent from the preset button's style-derived size constraints.
+- Restore the card layout after the flash so the first card remains correct without requiring a Single/Dual toggle.
+- Change the flash start color to pure yellow, #FFFF00 (RGB 255, 255, 0); keep the established fade duration and steps.
+
+### Verification
+
+- Maintainer confirmed the card-layout/button-jump fix.
+- The pure-yellow start color is saved in source but still awaits the maintainer's build and visual check.
