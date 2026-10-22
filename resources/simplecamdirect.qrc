@@ -1,0 +1,13 @@
+<RCC>
+  <qresource prefix="/simplecamdirect">
+    <file>arrow1.png</file>
+    <file>arrow2.png</file>
+    <file>arrow3.png</file>
+    <file>arrow4.png</file>
+    <file>arrow5.png</file>
+    <file>arrow6.png</file>
+    <file>arrow7.png</file>
+    <file>arrow8.png</file>
+    <file>BlackHomeButton.png</file>
+  </qresource>
+</RCC>

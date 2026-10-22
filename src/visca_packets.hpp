@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cmath>
 #include <stdexcept>
 #include <vector>
 
@@ -42,6 +43,15 @@ inline ViscaPacket makeZoomStop(int cameraAddress)
 	return {addressByte(cameraAddress), 0x01, 0x04, 0x07, 0x00, 0xFF};
 }
 
+inline ViscaPacket makeZoomPosition(int cameraAddress, int sliderValue)
+{
+	if (sliderValue < 0 || sliderValue > 200)
+		throw std::out_of_range("VISCA zoom slider value must be 0 through 200");
+	const int legacyZoom = static_cast<int>(std::lround(sliderValue / 5.0));
+	return {addressByte(cameraAddress), 0x01, 0x04, 0x47, static_cast<std::uint8_t>(legacyZoom / 10),
+		static_cast<std::uint8_t>(legacyZoom % 10), 0x01, 0x00, 0xFF};
+}
+
 inline ViscaPacket makeHome(int cameraAddress)
 {
 	return {addressByte(cameraAddress), 0x01, 0x06, 0x04, 0xFF};
@@ -68,6 +78,31 @@ inline std::vector<ViscaPacket> makePresetStoreSequence(int cameraAddress, int p
 inline ViscaPacket makeBacklight(int cameraAddress, bool enabled)
 {
 	return {addressByte(cameraAddress), 0x01, 0x04, 0x33, static_cast<std::uint8_t>(enabled ? 0x02 : 0x03), 0xFF};
+}
+
+inline ViscaPacket makeManualFocus(int cameraAddress, bool manual)
+{
+	return {addressByte(cameraAddress), 0x01, 0x04, 0x38, static_cast<std::uint8_t>(manual ? 0x03 : 0x02), 0xFF};
+}
+
+inline ViscaPacket makeFocusDrive(int cameraAddress, bool far)
+{
+	return {addressByte(cameraAddress), 0x01, 0x04, 0x08, static_cast<std::uint8_t>(far ? 0x03 : 0x02), 0xFF};
+}
+
+inline ViscaPacket makeFocusStop(int cameraAddress)
+{
+	return {addressByte(cameraAddress), 0x01, 0x04, 0x07, 0x00, 0xFF};
+}
+
+inline ViscaPacket makeExposureCompensation(int cameraAddress, bool enabled)
+{
+	return {addressByte(cameraAddress), 0x01, 0x04, 0x33, static_cast<std::uint8_t>(enabled ? 0x02 : 0x03), 0xFF};
+}
+
+inline ViscaPacket makeCameraPower(int cameraAddress, bool on)
+{
+	return {addressByte(cameraAddress), 0x01, 0x04, 0x00, static_cast<std::uint8_t>(on ? 0x02 : 0x03), 0xFF};
 }
 
 } // namespace simplecam

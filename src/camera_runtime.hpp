@@ -107,7 +107,8 @@ class CameraRuntime final : public QObject {
 public:
 	using Completion = ViscaTcpTransport::Completion;
 
-	explicit CameraRuntime(const QString &settingsPath, QObject *parent = nullptr);
+	explicit CameraRuntime(const QString &settingsPath, const QString &defaultName = QStringLiteral("Camera 1"),
+			QObject *parent = nullptr);
 
 	QString cameraName() const;
 	QString host() const;
@@ -119,6 +120,7 @@ public:
 	void setPort(quint16 port);
 	void setCameraAddress(int address);
 	void setCapacity(int capacity);
+	void setSharedPresetOwner(CameraRuntime &owner);
 
 	int activePage() const;
 	void setActivePage(int pageIndex);
@@ -131,8 +133,14 @@ public:
 	void stopPanTilt(int panSpeed, int tiltSpeed, Completion completion = {});
 	void zoom(bool tele, Completion completion = {});
 	void stopZoom(Completion completion = {});
+	void setZoomPosition(int sliderValue, Completion completion = {});
 	void home(Completion completion = {});
 	void backlight(bool enabled, Completion completion = {});
+	void setManualFocus(bool manual, Completion completion = {});
+	void focusDrive(bool far, Completion completion = {});
+	void stopFocus(Completion completion = {});
+	void exposureCompensation(bool enabled, Completion completion = {});
+	void setCameraPower(bool on, Completion completion = {});
 	void recallLogicalPreset(int logicalButton, int delayMs, Completion completion = {});
 	void storeLogicalPreset(int pageIndex, int slotIndex, Completion completion = {});
 
@@ -149,10 +157,11 @@ private:
 	int capacity_ = 255;
 	int activePage_ = 0;
 	PresetCatalog presets_;
+	CameraRuntime *sharedPresetOwner_ = nullptr;
 	ViscaTcpTransport transport_;
 };
 
-CameraRuntime *cameraRuntime();
-void setCameraRuntime(CameraRuntime *runtime);
+CameraRuntime *cameraRuntime(int cameraIndex = 0);
+void setCameraRuntime(int cameraIndex, CameraRuntime *runtime);
 
 } // namespace simplecam

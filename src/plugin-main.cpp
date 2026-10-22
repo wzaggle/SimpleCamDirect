@@ -9,20 +9,27 @@
 
 #include <QDir>
 #include <QFileInfo>
+#include <QPointer>
+#include <QTimer>
 #include <QWidget>
+
+#include <array>
 
 OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE(PLUGIN_NAME, "en-US")
 
 namespace {
 
-simplecam::CameraRuntime *runtime = nullptr;
+constexpr char kCameraControlDockTitle[] = "Camera Control v0.1.0-layoutfix1";
+
+std::array<simplecam::CameraRuntime *, 2> runtimes{};
 QWidget *cameraControlWidget = nullptr;
 QWidget *camerasWidget = nullptr;
+QPointer<QTimer> sourceNameRefreshTimer;
 
 void onFrontendEvent(enum obs_frontend_event event, void *)
 {
-	if (!runtime)
+	if (!runtimes[0] || !runtimes[1])
 		return;
 	if (event == OBS_FRONTEND_EVENT_SCENE_CHANGED) {
 		obs_source_t *scene = obs_frontend_get_current_scene();
@@ -48,6 +55,10 @@ void onFrontendEvent(enum obs_frontend_event event, void *)
 			obs_source_release(program);
 		if (preview)
 			obs_source_release(preview);
+	} else if (event == OBS_FRONTEND_EVENT_SCENE_LIST_CHANGED ||
+		   event == OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGED ||
+		   event == OBS_FRONTEND_EVENT_SCENE_COLLECTION_CLEANUP) {
+		simplecam::refreshPresetSourceNames();
 	}
 }
 
@@ -64,13 +75,17 @@ bool obs_module_load(void)
 	bfree(configPath);
 	QDir().mkpath(QFileInfo(settingsPath).absolutePath());
 
-	runtime = new simplecam::CameraRuntime(settingsPath);
-	simplecam::setCameraRuntime(runtime);
+	runtimes[0] = new simplecam::CameraRuntime(settingsPath, QStringLiteral("Camera 1"));
+	const QString secondSettingsPath = QFileInfo(settingsPath).dir().filePath(QStringLiteral("simplecamdirect-camera2.ini"));
+	runtimes[1] = new simplecam::CameraRuntime(secondSettingsPath, QStringLiteral("Camera 2"));
+	runtimes[1]->setSharedPresetOwner(*runtimes[0]);
+	simplecam::setCameraRuntime(0, runtimes[0]);
+	simplecam::setCameraRuntime(1, runtimes[1]);
 	simplecam::registerPresetSource();
 
-	cameraControlWidget = new simplecam::CameraControlDock(*runtime);
-	camerasWidget = new simplecam::CamerasDock(*runtime);
-	const bool controlAdded = obs_frontend_add_dock_by_id("simplecamdirect.camera-control", "Camera Control", cameraControlWidget);
+	cameraControlWidget = new simplecam::CameraControlDock(*runtimes[0], *runtimes[1]);
+	camerasWidget = new simplecam::CamerasDock(*runtimes[0], *runtimes[1]);
+	const bool controlAdded = obs_frontend_add_dock_by_id("simplecamdirect.camera-control", kCameraControlDockTitle, cameraControlWidget);
 	const bool camerasAdded = obs_frontend_add_dock_by_id("simplecamdirect.cameras", "Cameras", camerasWidget);
 	if (!controlAdded || !camerasAdded) {
 		obs_log(LOG_ERROR, "SimpleCam Direct could not add its OBS dock widgets");
@@ -80,12 +95,19 @@ bool obs_module_load(void)
 			obs_frontend_remove_dock("simplecamdirect.cameras");
 		cameraControlWidget = nullptr;
 		camerasWidget = nullptr;
-		delete runtime;
-		runtime = nullptr;
-		simplecam::setCameraRuntime(nullptr);
+		delete runtimes[1];
+		delete runtimes[0];
+		runtimes = {};
+		simplecam::setCameraRuntime(0, nullptr);
+		simplecam::setCameraRuntime(1, nullptr);
 		return false;
 	}
 	obs_frontend_add_event_callback(onFrontendEvent, nullptr);
+	sourceNameRefreshTimer = new QTimer(cameraControlWidget);
+	sourceNameRefreshTimer->setInterval(1000);
+	QObject::connect(sourceNameRefreshTimer.data(), &QTimer::timeout,
+			 []() { simplecam::refreshPresetSourceNames(); });
+	sourceNameRefreshTimer->start();
 	obs_log(LOG_INFO, "SimpleCam Direct %s loaded", PLUGIN_VERSION);
 	return true;
 }
@@ -93,12 +115,21 @@ bool obs_module_load(void)
 void obs_module_unload(void)
 {
 	obs_frontend_remove_event_callback(onFrontendEvent, nullptr);
-	simplecam::setCameraRuntime(nullptr);
-	delete runtime;
-	runtime = nullptr;
+	// The timer is parented to the control dock. OBS may already have destroyed
+	// that dock during shutdown, so let QObject ownership destroy the timer and
+	// use QPointer to avoid a stale global pointer.
+	if (sourceNameRefreshTimer)
+		sourceNameRefreshTimer->stop();
+	sourceNameRefreshTimer = nullptr;
+	// Remove the UI objects before destroying the runtimes they reference.
 	obs_frontend_remove_dock("simplecamdirect.camera-control");
 	obs_frontend_remove_dock("simplecamdirect.cameras");
 	cameraControlWidget = nullptr;
 	camerasWidget = nullptr;
+	simplecam::setCameraRuntime(0, nullptr);
+	simplecam::setCameraRuntime(1, nullptr);
+	delete runtimes[1];
+	delete runtimes[0];
+	runtimes = {};
 	obs_log(LOG_INFO, "SimpleCam Direct unloaded");
 }

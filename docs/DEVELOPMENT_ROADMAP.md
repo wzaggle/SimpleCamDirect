@@ -8,16 +8,16 @@ The version labels below are planning markers, not release commitments.
 
 ## Milestone 1 — SimpleCam Direct 0.1.x: AViPAS VISCA vertical slice
 
-**Scope:** Windows only; one AViPAS AV-1280W; its proven VISCA connection and commands; no generic profile editor or camera-profile library UI.
+**Scope:** Windows only; AViPAS AV-1280W over VISCA/TCP; no generic profile editor or camera-profile library UI. The first real hardware validation remains one physical camera. A second independent AViPAS slot is included now to exercise two-camera settings, source selection, and the Dual card layout; it is not a second model or a claim of multi-camera hardware testing.
 
-**Implementation status (2026-10-21):** the first code pass now contains the Windows CMake/Visual Studio scaffold, Camera Control and Cameras docks, a native preset source, asynchronous TCP VISCA queue, and packet fixtures. It has not yet been compiled in Windows/OBS or tested against the camera. The current UI is a deliberately reduced first vertical slice: advanced focus/white-balance and camera power controls remain unimplemented. This is not yet an exit-gate or release claim.
+**Implementation status (2026-10-21):** the Windows CMake/Visual Studio scaffold now contains independent Camera 1 and Camera 2 runtimes and settings, a Single/Dual Camera Control dock, a camera-selectable native preset source, asynchronous TCP VISCA queues, and packet fixtures. Camera 2 starts without an IP address. The updated plugin has not yet been compiled in Windows/OBS or tested against the camera; the added focus, BackLight, exposure compensation, and camera power controls also need hardware verification. This is not an exit-gate or release claim.
 
 Deliver one OBS plugin that can replace the current SimpleCamQt-plus-OBS-Lua workflow for this camera:
 
 - Camera Control dock with the direct controls and named presets users rely on. Keep preset naming and visual button swapping in its Settings mode.
 - Separate dock named Cameras for camera/profile and connection configuration; initially expose only the fields required for the AViPAS VISCA target.
 - Scene-embedded preset source with camera and logical preview selection (1–14); Program/Preview/Both behavior; delay; clear source naming; and duplicate-source handling. Source editing requests the preset names for the currently selected Preview Group; each source stores its preview number but not the group.
-- Preset naming, five default pages, visual order, and supported speed behavior needed for the current workflow. The top `PG` button cycles pages. In Settings, put `+` and trash beside the active page-description field; trash removes only a fully blank page when at least five pages remain. Put Clear beside Swap in Settings; Clear blanks a label without erasing the camera's stored preset. Control mode keeps Set/Rename; Settings provides Swap/Clear/Rename.
+- Preset naming, five default pages, visual order, and supported speed behavior needed for the current workflow. In Settings, the visible Preset Group button cycles pages. Put `+` and trash beside the active page-description field; trash removes only a fully blank page when at least five pages remain. Put Clear beside Swap in Settings; Clear blanks a label without erasing the camera's stored preset. Control mode keeps Set/Rename; Settings provides Swap/Clear/Rename.
 - Camera setup limited to the settings required for this one Windows/VISCA/AViPAS target; no general profile authoring interface.
 - Direct camera commands through one in-process action service shared by the plugin's scene sources and camera dock. Keep SimpleCamQt and the legacy file-bridge plugin available for side-by-side comparison; SimpleCam Direct does not depend on either one.
 

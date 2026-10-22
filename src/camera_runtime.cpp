@@ -11,6 +11,7 @@
 #include <memory>
 
 #include <algorithm>
+#include <array>
 #include <utility>
 
 namespace simplecam {
@@ -450,11 +451,11 @@ void ViscaTcpTransport::closeSocket()
 	oldSocket->deleteLater();
 }
 
-CameraRuntime::CameraRuntime(const QString &settingsPath, QObject *parent)
+CameraRuntime::CameraRuntime(const QString &settingsPath, const QString &defaultName, QObject *parent)
 	: QObject(parent), settings_(settingsPath, QSettings::IniFormat),
 	  cameraAddress_(settings_.value(QStringLiteral("camera/address"), 1).toInt()),
 	  port_(static_cast<quint16>(settings_.value(QStringLiteral("camera/port"), 1259).toUInt())),
-	  cameraName_(settings_.value(QStringLiteral("camera/name"), QStringLiteral("Camera 1")).toString()),
+	  cameraName_(settings_.value(QStringLiteral("camera/name"), defaultName).toString()),
 	  host_(settings_.value(QStringLiteral("camera/host"), QString()).toString()),
 	capacity_(settings_.value(QStringLiteral("camera/capacity"), 100).toInt()),
 	  presets_(settings_, capacity_), transport_(this)
@@ -523,32 +524,43 @@ void CameraRuntime::setCameraAddress(int address)
 void CameraRuntime::setCapacity(int capacity)
 {
 	capacity_ = std::clamp(capacity, 1, kMaxPresetCapacity);
-	presets_.setCapacity(capacity_);
+	presets().setCapacity(capacity_);
 	writeCameraSettings();
+}
+
+void CameraRuntime::setSharedPresetOwner(CameraRuntime &owner)
+{
+	sharedPresetOwner_ = (&owner == this) ? nullptr : &owner;
 }
 
 int CameraRuntime::activePage() const
 {
+	if (sharedPresetOwner_)
+		return sharedPresetOwner_->activePage();
 	return activePage_;
 }
 
 void CameraRuntime::setActivePage(int pageIndex)
 {
-	if (presets_.pageCount() == 0) {
+	if (sharedPresetOwner_) {
+		sharedPresetOwner_->setActivePage(pageIndex);
+		return;
+	}
+	if (presets().pageCount() == 0) {
 		activePage_ = 0;
 		return;
 	}
-	activePage_ = std::clamp(pageIndex, 0, presets_.pageCount() - 1);
+	activePage_ = std::clamp(pageIndex, 0, presets().pageCount() - 1);
 }
 
 PresetCatalog &CameraRuntime::presets()
 {
-	return presets_;
+	return sharedPresetOwner_ ? sharedPresetOwner_->presets() : presets_;
 }
 
 const PresetCatalog &CameraRuntime::presets() const
 {
-	return presets_;
+	return sharedPresetOwner_ ? sharedPresetOwner_->presets() : presets_;
 }
 
 void CameraRuntime::testConnection(Completion completion)
@@ -591,6 +603,16 @@ void CameraRuntime::stopZoom(Completion completion)
 	sendPacket(packet, false, std::move(completion));
 }
 
+void CameraRuntime::setZoomPosition(int sliderValue, Completion completion)
+{
+	try {
+		sendPacket(makeZoomPosition(cameraAddress_, sliderValue), true, std::move(completion));
+	} catch (const std::exception &e) {
+		if (completion)
+			completion(false, QString::fromUtf8(e.what()));
+	}
+}
+
 void CameraRuntime::home(Completion completion)
 {
 	const auto packet = makeHome(cameraAddress_);
@@ -601,6 +623,31 @@ void CameraRuntime::backlight(bool enabled, Completion completion)
 {
 	const auto packet = makeBacklight(cameraAddress_, enabled);
 	sendPacket(packet, true, std::move(completion));
+}
+
+void CameraRuntime::setManualFocus(bool manual, Completion completion)
+{
+	sendPacket(makeManualFocus(cameraAddress_, manual), true, std::move(completion));
+}
+
+void CameraRuntime::focusDrive(bool far, Completion completion)
+{
+	sendPacket(makeFocusDrive(cameraAddress_, far), false, std::move(completion));
+}
+
+void CameraRuntime::stopFocus(Completion completion)
+{
+	sendPacket(makeFocusStop(cameraAddress_), false, std::move(completion));
+}
+
+void CameraRuntime::exposureCompensation(bool enabled, Completion completion)
+{
+	sendPacket(makeExposureCompensation(cameraAddress_, enabled), true, std::move(completion));
+}
+
+void CameraRuntime::setCameraPower(bool on, Completion completion)
+{
+	sendPacket(makeCameraPower(cameraAddress_, on), true, std::move(completion));
 }
 
 void CameraRuntime::recallLogicalPreset(int logicalButton, int delayMs, Completion completion)
@@ -627,7 +674,7 @@ void CameraRuntime::recallLogicalPreset(int logicalButton, int delayMs, Completi
 
 void CameraRuntime::storeLogicalPreset(int pageIndex, int slotIndex, Completion completion)
 {
-	const int physical = presets_.allocatePhysicalPreset(pageIndex, slotIndex);
+	const int physical = presets().allocatePhysicalPreset(pageIndex, slotIndex);
 	if (physical < 1) {
 		if (completion)
 			completion(false, QStringLiteral("No unused physical preset slots remain on this camera"));
@@ -663,21 +710,25 @@ void CameraRuntime::writeCameraSettings()
 
 int CameraRuntime::resolvePhysicalPreset(int pageIndex, int slotIndex) const
 {
-	if (!presets_.hasUsablePreset(pageIndex, slotIndex))
+	if (!presets().hasUsablePreset(pageIndex, slotIndex))
 		return -1;
-	return presets_.slot(pageIndex, slotIndex).physicalPreset;
+	return presets().slot(pageIndex, slotIndex).physicalPreset;
 }
 
-CameraRuntime *g_cameraRuntime = nullptr;
+std::array<CameraRuntime *, 2> g_cameraRuntimes{};
 
-CameraRuntime *cameraRuntime()
+CameraRuntime *cameraRuntime(int cameraIndex)
 {
-	return g_cameraRuntime;
+	if (cameraIndex < 0 || cameraIndex >= static_cast<int>(g_cameraRuntimes.size()))
+		return nullptr;
+	return g_cameraRuntimes[static_cast<size_t>(cameraIndex)];
 }
 
-void setCameraRuntime(CameraRuntime *runtime)
+void setCameraRuntime(int cameraIndex, CameraRuntime *runtime)
 {
-	g_cameraRuntime = runtime;
+	if (cameraIndex < 0 || cameraIndex >= static_cast<int>(g_cameraRuntimes.size()))
+		return;
+	g_cameraRuntimes[static_cast<size_t>(cameraIndex)] = runtime;
 }
 
 } // namespace simplecam

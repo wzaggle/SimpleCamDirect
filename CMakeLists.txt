@@ -20,6 +20,7 @@ add_library(${CMAKE_PROJECT_NAME} MODULE
   src/camera_runtime.cpp
   src/camera_docks.cpp
   src/preset_source.cpp
+  resources/simplecamdirect.qrc
 )
 
 find_package(libobs REQUIRED)

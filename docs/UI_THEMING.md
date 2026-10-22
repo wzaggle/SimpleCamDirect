@@ -24,6 +24,10 @@ Both modes have the same controls, layout, behavior, and accessibility requireme
 - Recompute theme-aware styling when the OBS theme changes. Preserve contrast and meaning in both dark and light themes; never rely on color alone to communicate camera selection, preset group, error, or confirmation.
 - Avoid baking theme colors into icons or image resources when a style-aware vector/custom widget can render them. Keep any fixed Classic colors explicit and localized.
 
+## Current title-bar behavior
+
+OBS creates the dock frame and title bar when the plugin registers its content through `obs_frontend_add_dock_by_id`. The plugin styles its own content widgets; it does not set the dock title-bar stylesheet or the application-wide palette. The close button's icon and hover/pressed appearance come from the active OBS theme and Qt's dock-widget styling. The maintainer observed the same active/inactive close-button color behavior on a Restream dock, confirming that this is host-level behavior rather than SimpleCamDirect-specific behavior. Keep the close button visible and leave its visual states to OBS/Qt unless cross-theme testing identifies a real defect.
+
 ## Verification
 
 Test the dock in both docked and floating states, using every supported OBS theme family available on the target platforms. Verify that docked content always matches OBS and never shows Classic overrides; floating Follow OBS updates with theme changes; floating SimpleCam Classic retains its accents; and redocking immediately restores OBS styling. Neither choice may change layout geometry or control behavior. Test selected/unselected, hover/focus, disabled, error, group, and flash-confirmation states for readable contrast.
