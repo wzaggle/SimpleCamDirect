@@ -101,7 +101,7 @@ Run from a safe position; record each independently:
 - [ ] Zoom in/out/stop; distinguish optical versus digital range only if the camera reports it.
 - [ ] Manual focus toggle and focus near/far/stop; restore auto focus.
 - [ ] Preset recall for a known safe preset.
-- [ ] Verify the profile's preset capacity and any per-camera override; unavailable buttons are disabled and display `---`.
+- [ ] Verify the selected profile's preset capacity; unavailable buttons are disabled and display `---`. If the physical model/firmware differs, select or create a separate matching profile rather than applying a per-camera capability override.
 - [ ] For a partial group (for example, 25 usable presets), confirm the final group shows only 11 active entries and three disabled `---` entries.
 - [ ] Verify group offset mapping at the boundaries: group 1 presets 1–14, group 2 presets 15–28, and the last enabled preset for the configured capacity.
 - [ ] Preset store only to a test slot; wait for ACK/completion or explicit result; then recall and compare.
