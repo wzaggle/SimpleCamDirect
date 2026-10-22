@@ -106,6 +106,8 @@ private:
 class CameraRuntime final : public QObject {
 public:
 	using Completion = ViscaTcpTransport::Completion;
+	enum class PresetRecallOrigin { CameraControl, ObsSource };
+	using PresetRecallObserver = std::function<void(int logicalButton, PresetRecallOrigin origin)>;
 
 	explicit CameraRuntime(const QString &settingsPath, const QString &defaultName = QStringLiteral("Camera 1"),
 			QObject *parent = nullptr);
@@ -141,8 +143,10 @@ public:
 	void stopFocus(Completion completion = {});
 	void exposureCompensation(bool enabled, Completion completion = {});
 	void setCameraPower(bool on, Completion completion = {});
-	void recallLogicalPreset(int logicalButton, int delayMs, Completion completion = {});
+	void recallLogicalPreset(int logicalButton, int delayMs, Completion completion = {},
+				 PresetRecallOrigin origin = PresetRecallOrigin::CameraControl);
 	void storeLogicalPreset(int pageIndex, int slotIndex, Completion completion = {});
+	void setPresetRecallObserver(PresetRecallObserver observer);
 
 private:
 	void sendPacket(const ViscaPacket &packet, bool waitForCompletion, Completion completion, int delayBeforeMs = 0);
@@ -156,6 +160,7 @@ private:
 	QString host_;
 	int capacity_ = 255;
 	int activePage_ = 0;
+	PresetRecallObserver presetRecallObserver_;
 	PresetCatalog presets_;
 	CameraRuntime *sharedPresetOwner_ = nullptr;
 	ViscaTcpTransport transport_;
