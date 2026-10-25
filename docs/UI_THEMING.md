@@ -26,7 +26,7 @@ Both modes have the same controls, layout, behavior, and accessibility requireme
 
 ## Current title-bar behavior
 
-OBS creates the dock frame and title bar when the plugin registers its content through `obs_frontend_add_dock_by_id`. The plugin styles its own content widgets; it does not set the dock title-bar stylesheet or the application-wide palette. The close button's icon and hover/pressed appearance come from the active OBS theme and Qt's dock-widget styling. The maintainer observed the same active/inactive close-button color behavior on a Restream dock, confirming that this is host-level behavior rather than SimpleCamDirect-specific behavior. Keep the close button visible and leave its visual states to OBS/Qt unless cross-theme testing identifies a real defect.
+OBS creates the dock frame and title bar when the plugin registers its content through `obs_frontend_add_dock_by_id`. The plugin styles its own content widgets; it does not set the dock title-bar stylesheet or the application-wide palette. The close button's icon and hover/pressed appearance come from the active OBS theme and Qt's dock-widget styling. The maintainer observed the same active/inactive close-button color behavior on a Restream dock, confirming that this is host-level behavior rather than SimpleCamPTZ-specific behavior. Keep the close button visible and leave its visual states to OBS/Qt unless cross-theme testing identifies a real defect.
 
 ## Verification
 

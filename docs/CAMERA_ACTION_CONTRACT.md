@@ -14,13 +14,15 @@ The first implementation targets VISCA only. ONVIF and NDI PTZ may be added late
 | `panTilt` | Direction: left, right, up, down; manual movement speed; start/stop phase | Dock control |
 | `zoom` | Direction: in/out; manual zoom speed where supported; start/stop phase | Dock control |
 | `zoomTo` | Absolute target position in the profile's native range; a separate optional speed parameter only when the model's absolute-move operation supports it | Dock control and future scene-source actions |
-| `presetStore` | Preset number `N` | Dock control; confirm before overwriting |
+| `presetStore` | Preset number `N`; immediately replaces the camera's stored position for that slot | Controls Dock; no overwrite confirmation |
 | `presetRecall` | Physical preset number resolved from the source's logical preview number (1–14) and the currently selected Preview Group; optional per-source transition speed | Dock and scene preset source |
 | `focusMode` | Auto/manual | Dock control |
 | `focusMove` | Near/far; start/stop phase | Dock control |
 | `whiteBalanceMode` | Auto/manual | Dock control |
 | `backlightMode` | Auto/manual, or the exact supported on/off behavior declared by the profile | Dock control |
 | `cameraPower` | On/standby/off as supported by the model; UI label reflects actual operation | Dock control; confirmation for shutdown/standby |
+
+Preset numbers shown in the UI and used by SimpleCam's logical/physical mapping are 1-based for people. The protocol adapter converts that value to the camera's native preset index. For VISCA, visible/physical preset 1 maps to protocol memory 0, and visible/physical preset N maps to protocol memory N−1. Profiles declare the camera's protocol memory range; users and OBS sources do not need to see or manage zero-based protocol indexes.
 
 The `start/stop` phases are part of the action contract so a held control can stop safely on release. If a device implements a function as a one-shot step instead, the profile/driver declares that behavior. Unsupported functions are disabled or marked unsupported; do not synthesize a command from a similar-looking VISCA function.
 

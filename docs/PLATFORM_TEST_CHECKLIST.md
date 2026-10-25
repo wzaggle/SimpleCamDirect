@@ -2,13 +2,19 @@
 
 Use this checklist to locate a failure at the right layer: OBS/plugin load, profile/configuration, protocol, transport, camera behavior, or scene-event logic. A working web page only proves that the camera's web service works; it does not prove the selected PTZ control protocol, port, framing, or credentials are correct.
 
-## SimpleCam Direct 0.1.0 first-pass status (2026-10-21)
+## SimpleCamPTZ 0.1.0 first-pass status (2026-10-21)
 
 - Windows x64 CMake/Visual Studio build: **not run in this workspace**.
 - OBS 32.2.1 plugin load and dock/source registration: **not run**.
 - VISCA packet fixture tests: **passed locally** with GCC 13.3.0; these test packet bytes only.
 - AViPAS AV-1280W transport and real-camera actions: **not run in this pass**.
 - macOS and Linux: **out of scope for the Windows first pass**.
+
+## 2026-10-24 — production-test package preparation
+
+- Maintainer reports that the current SimpleCam Direct workflow is operating well enough to begin production-equipment testing.
+- The AViPAS profile is marked `hardware-tested` for the maintainer-tested AV-1280W unit over raw VISCA/TCP. Firmware/revision were not recorded. Digital zoom behavior on that unit remains inconclusive and is explicitly outside the confirmation claim.
+- The SimpleCamPTZ rename, migration handling, and Inno Setup installer are new in this source package. A Windows/OBS rebuild, installer compile, and install/upgrade test remain required on the maintainer's Windows development system before production use.
 
 ## Test record header
 
@@ -70,6 +76,14 @@ Never put passwords, authentication tokens, public IPs, or sensitive network det
 - [ ] Duplicate profile ids, unknown schema versions, unknown driver names, unsupported framing and out-of-range values are rejected.
 - [ ] A profile with unsupported optional features displays those features as unavailable, not as failing buttons.
 - [ ] The selected profile, camera connection variant, and camera identity persist after OBS restart.
+- [ ] Profile selection is available from **Tools → SimpleCamPTZ Cameras**; the Camera Control dock stays present while the tool opens and closes.
+- [ ] Selecting a compatible profile updates Camera Control and scene source actions without restarting OBS; missing commands fail with a readable status instead of sending a built-in fallback packet.
+- [ ] Configure all five AViPAS slots independently, restart OBS, and verify each profile/name/IP/port/address persists. Confirm new slots start with blank IPs.
+- [ ] Map each camera slot to its raw OBS video input, restart OBS, and confirm the mapping persists. Rename the OBS source and verify UUID-based mapping still resolves; remove/replace the source and verify the slot becomes unmarked rather than selecting a different source.
+- [ ] Confirm no camera indicator is marked when no raw feeds are configured or none of the mapped camera feeds is visible in the active Program scene.
+- [ ] In Dual mode, select different pairs from the five camera buttons; choosing a slot already shown on the other card moves that other card to the previous selection so no slot appears twice.
+- [ ] Create preset sources for each of the five slots and verify the source property selector and recall target use the selected slot.
+- [ ] A profile with fewer presets dims/unmaps entries beyond its declared capacity for that selected camera. Shared visual mappings must not be silently rewritten when a different-capacity profile is selected.
 - [ ] User credentials/endpoints are not stored in public profile JSON and are redacted from logs.
 - [ ] Rescan/import reports accepted profiles and rejected profiles separately.
 
@@ -83,6 +97,7 @@ Never put passwords, authentication tokens, public IPs, or sensitive network det
 - [ ] Confirm VISCA mode and address, or ONVIF/NDI discovery and supported-control flag.
 - [ ] Confirm correct IP packet envelope/header/sequence counter if the model requires one.
 - [ ] Observe reply path: no reply, ACK, completion, protocol error, or timeout; match it to the profile's declared response policy.
+- [ ] In the Profile Test tool, run **Test All** only on the intended test camera; verify every configured command row reaches PASS/FAIL, the sweep continues after a failed command, and the trace preserves TX bytes, raw replies, and errors. Confirm the selected preset slot before allowing preset clear/store commands.
 
 ### Serial
 
@@ -125,12 +140,14 @@ Run from a safe position; record each independently:
 - [ ] Add a named preset source; choose camera, logical preset, and configured trigger mode.
 - [ ] Rename the source to confirm the displayed name clearly identifies camera and preset; duplicates are marked consistently.
 - [ ] Test Program-only, Preview-only, and Both using a copied scene.
+- [ ] With two mapped camera feeds stacked in the Program scene, verify only the highest visible mapped feed gets the dark-red number circle. Hide it and confirm the next visible mapped camera becomes marked; test nested scenes/groups and a scene with no visible camera feed.
+- [ ] Verify a successful OBS recall displays “{Camera Name} moved to {Preset Name} by OBS” for five seconds, that another move replaces it, and that a failed recall does not claim success.
 - [ ] Test configured delay and confirm a later source waits behind an earlier delayed request; verify Preview delay behavior against the intended new contract.
 - [ ] Rapid scene transitions do not queue stale moves or send unintended commands twice.
 - [ ] Scene collection save/reload preserves source configuration and camera association.
-- [ ] SimpleCamQt, the legacy Lua/file-bridge plugin, SimpleCam Direct, and the camera web page can independently command the same network camera without an exclusive ownership lock.
+- [ ] SimpleCamQt, the legacy Lua/file-bridge plugin, SimpleCamPTZ, and the camera web page can independently command the same network camera without an exclusive ownership lock.
 - [ ] Direct scene actions preserve their own OBS dispatch order, including repeated requests. Do not treat operations from separate clients as globally ordered.
-- [ ] The camera web page remains usable alongside SimpleCamQt and SimpleCam Direct; no plugin-imposed exclusive camera ownership or command lock blocks it.
+- [ ] The camera web page remains usable alongside SimpleCamQt and SimpleCamPTZ; no plugin-imposed exclusive camera ownership or command lock blocks it.
 - [ ] Reorder/swap visual positions changes the display mapping without changing physical preset slots unless the user explicitly chooses a physical preset operation.
 - [ ] An unavailable camera/source fails visibly and safely; no command is sent to a different camera as a fallback.
 

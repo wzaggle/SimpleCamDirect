@@ -1,6 +1,6 @@
 #pragma once
 
-#include "visca_packets.hpp"
+#include "camera_profile.hpp"
 
 #include <QObject>
 #include <QByteArray>
@@ -11,10 +11,16 @@
 #include <QVector>
 
 #include <functional>
+#include <cstdint>
+#include <array>
 
 class QTcpSocket;
 
 namespace simplecam {
+
+class CameraRuntime;
+inline constexpr int CameraSlotCount = 5;
+using CameraRuntimeArray = std::array<CameraRuntime *, CameraSlotCount>;
 
 struct PresetSlot {
 	QString label;
@@ -47,8 +53,7 @@ public:
 	bool setLabel(int pageIndex, int slotIndex, const QString &label);
 	bool clearLabel(int pageIndex, int slotIndex);
 	bool swapSlots(int pageA, int slotA, int pageB, int slotB);
-	int allocatePhysicalPreset(int pageIndex, int slotIndex);
-	void setCapacity(int capacity);
+	int allocatePhysicalPreset(int pageIndex, int slotIndex, int allowedCapacity = 0);
 
 private:
 	bool validSlot(int pageIndex, int slotIndex) const;
@@ -67,6 +72,7 @@ public:
 	struct FrameCommand {
 		QByteArray bytes;
 		bool waitForCompletion = false;
+		std::function<void(const QByteArray &)> onReply;
 	};
 
 	explicit ViscaTcpTransport(QObject *parent = nullptr);
@@ -108,20 +114,33 @@ public:
 	using Completion = ViscaTcpTransport::Completion;
 	enum class PresetRecallOrigin { CameraControl, ObsSource };
 	using PresetRecallObserver = std::function<void(int logicalButton, PresetRecallOrigin origin)>;
+	using PresetRecallResultObserver =
+		std::function<void(int logicalButton, int pageIndex, PresetRecallOrigin origin, bool success)>;
+	using ZoomPositionObserver = std::function<void(int sliderValue)>;
 
 	explicit CameraRuntime(const QString &settingsPath, const QString &defaultName = QStringLiteral("Camera 1"),
-			QObject *parent = nullptr);
+			const QString &defaultProfilePath = {}, QObject *parent = nullptr);
 
 	QString cameraName() const;
+	QString cameraFeedSourceUuid() const;
 	QString host() const;
 	quint16 port() const;
 	int cameraAddress() const;
 	int capacity() const;
+	bool hasUsablePreset(int pageIndex, int slotIndex) const;
+	QString profilePath() const;
+	QString profileId() const;
+	QString profileDisplayName() const;
+	QString profileLoadError() const;
+	bool hasLoadedProfile() const;
+	int zoomAbsoluteTemplateCount() const;
+	bool canSetZoomPosition() const;
 	void setCameraName(const QString &name);
+	void setCameraFeedSourceUuid(const QString &uuid);
 	void setHost(const QString &host);
 	void setPort(quint16 port);
 	void setCameraAddress(int address);
-	void setCapacity(int capacity);
+	bool setProfilePath(const QString &path, QString *error = nullptr);
 	void setSharedPresetOwner(CameraRuntime &owner);
 
 	int activePage() const;
@@ -147,20 +166,37 @@ public:
 				 PresetRecallOrigin origin = PresetRecallOrigin::CameraControl);
 	void storeLogicalPreset(int pageIndex, int slotIndex, Completion completion = {});
 	void setPresetRecallObserver(PresetRecallObserver observer);
+	void setPresetRecallResultObserver(PresetRecallResultObserver observer);
+	void setZoomPositionObserver(ZoomPositionObserver observer);
 
 private:
-	void sendPacket(const ViscaPacket &packet, bool waitForCompletion, Completion completion, int delayBeforeMs = 0);
+	ViscaTemplateValues templateValues(int physicalPreset = 1, int panSpeed = 8, int tiltSpeed = 8,
+				    std::uint8_t panDirection = 1, std::uint8_t tiltDirection = 3,
+				    int zoomSpeed = 8, int zoomPosition = 0) const;
+	bool renderCommandPackets(const QString &commandId, const ViscaTemplateValues &values,
+				  QVector<QByteArray> *packets, QString *error = nullptr) const;
+	void sendProfileCommand(const QString &commandId, const ViscaTemplateValues &values,
+				Completion completion, int delayBeforeMs = 0);
+	void appendZoomInquiry(QVector<ViscaTcpTransport::FrameCommand> &commands);
+	void sendPresetRecallAndZoomInquiry(int physicalPreset, int delayMs, Completion completion);
+	void handleZoomInquiryReply(const QByteArray &reply);
 	void writeCameraSettings();
 	int resolvePhysicalPreset(int pageIndex, int slotIndex) const;
 
 	QSettings settings_;
+	QString profilePath_;
+	CameraProfileDocument profile_;
+	QString profileLoadError_;
 	int cameraAddress_ = 1;
 	quint16 port_ = 1259;
 	QString cameraName_ = QStringLiteral("Camera 1");
+	QString cameraFeedSourceUuid_;
 	QString host_;
 	int capacity_ = 255;
 	int activePage_ = 0;
 	PresetRecallObserver presetRecallObserver_;
+	PresetRecallResultObserver presetRecallResultObserver_;
+	ZoomPositionObserver zoomPositionObserver_;
 	PresetCatalog presets_;
 	CameraRuntime *sharedPresetOwner_ = nullptr;
 	ViscaTcpTransport transport_;

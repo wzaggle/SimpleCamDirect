@@ -2,20 +2,33 @@
 
 ## Goal
 
-Camera profiles need a way to specify fixed protocol bytes or fields while the plugin supplies runtime values such as camera address, speed, preset number, and target position. The profile format should remain data, not become a programming language.
+Camera profiles specify fixed protocol bytes or fields while the plugin supplies runtime values such as camera address, speed, preset number, and target position. The profile format remains declarative data, not a programming language.
 
-Use a constrained, printf-inspired placeholder syntax with a plugin-owned variable registry and allowlisted output formats. Do not implement C `printf`, Lua, scripting, expression evaluation, or user-defined functions.
+Use a constrained token syntax with a plugin-owned variable registry and allowlisted output encodings. Do not implement C `printf`, Lua, scripting, expression evaluation, or user-defined functions.
 
 ## Template syntax
 
-Use `%{variable.name:format}`. The format is a registered formatter name, not an arbitrary C conversion or width/precision string. Literals remain exactly where the camera protocol defines them. For VISCA packet templates, commas or whitespace may separate byte cells; validation normalizes them before encoding.
+The editor inserts short, fixed tokens such as `{A}` and `{ZP}` so users do not have to type long variable names. These are keys in a plugin-owned variable registry, not user-defined names. Each operation has an allowlist of tokens, types, ranges, and encodings. The first VISCA profile test implements the eight tokens below. The semantic names in the registry and this document remain the stable explanation of what each short token means.
 
 `templateLanguageVersion` belongs to a command binding that contains a template. If omitted, readers interpret it as version 1. A reader must reject an unknown version with a clear validation path; it must never silently parse an unfamiliar syntax as version 1. Adding a variable or formatter that leaves the grammar and all existing meanings unchanged is an additive registry change. Changing the grammar or an existing formatter's behavior requires an explicit version/migration and regression review.
+
+| Token | Registry meaning | Encoding in the first VISCA tester |
+|---|---|---|
+| `{A}` | `camera.viscaAddress` | One address nibble, 1–7; the header literal supplies the leading `8` |
+| `{PS}` | `pan.speed` | One byte, 1–24 |
+| `{TS}` | `tilt.speed` | One byte, 1–20 |
+| `{PD}` | `pan.direction` | One byte, 1–3 |
+| `{TD}` | `tilt.direction` | One byte, 1–3 |
+| `{ZS}` | `zoom.speed` | One nibble, 0–15 |
+| `{ZP}` | `zoom.position` | Four high-to-low VISCA nibble bytes (`0p 0q 0r 0s`) |
+| `{PI}` | `preset.index` | User-facing preset 1–255 is converted to VISCA index 0–254 |
+
+`templateLanguageVersion` belongs to a command binding. If omitted, readers interpret it as version 1. A reader must reject an unknown version; it must never silently parse unfamiliar syntax as version 1. Adding a token without changing existing meanings is additive. Changing token meaning, grammar, or encoding requires an explicit version/migration and regression review.
 
 Example absolute zoom packet (position only):
 
 ```text
-8%{camera.viscaAddress:hexNibble} 01 04 47 %{zoom.position:viscaNibbles4} FF
+8{A} 01 04 47 {ZP} FF
 ```
 
 For camera address 1 and native zoom position `0x1234`, the encoded packet is:
@@ -29,10 +42,10 @@ The user-provided example combines a speed value with an absolute position. Sony
 Example variable-speed zoom-in binding:
 
 ```text
-8%{camera.viscaAddress:hexNibble} 01 04 07 2%{zoom.speed:hexNibble} FF
+8{A} 01 04 07 2{ZS} FF
 ```
 
-The `viscaNibbles4` formatter emits the four high-to-low position nibbles in VISCA's four `0z` byte cells. The profile states the exact native zoom minimum/maximum and command applicability. The app maps its normalized zoom control to that model-specific range before formatting; if the range is unknown, validation must block this binding instead of guessing.
+`{ZP}` emits the four high-to-low position nibbles in VISCA's four `0z` byte cells. The profile states the exact native zoom minimum/maximum and command applicability. The app maps its normalized zoom control to that model-specific range before formatting; if the range is unknown, validation must block this binding instead of guessing.
 
 The profile can bind the templates to semantic operations like this:
 
@@ -48,11 +61,11 @@ The profile can bind the templates to semantic operations like this:
   "commands": {
     "zoomAbsolute": {
       "driverOperation": "visca.zoomAbsolute",
-      "template": "8%{camera.viscaAddress:hexNibble} 01 04 47 %{zoom.position:viscaNibbles4} FF"
+      "template": "8{A} 01 04 47 {ZP} FF"
     },
     "zoomIn": {
       "driverOperation": "visca.zoomIn",
-      "template": "8%{camera.viscaAddress:hexNibble} 01 04 07 2%{zoom.speed:hexNibble} FF"
+      "template": "8{A} 01 04 07 2{ZS} FF"
     }
   }
 }
@@ -60,7 +73,7 @@ The profile can bind the templates to semantic operations like this:
 
 The numeric `maximum` above is only an illustration; each camera profile must use the range documented for that exact model and zoom mode. Continuous zoom speed and absolute zoom target are distinct input values.
 
-The user's shorthand names (`%speed`, `%zn1` … `%zn4`) describe the same idea. Canonical namespaced variables plus an explicit formatter are preferred because they reveal the value's meaning and representation. The editor may show a friendlier variable picker, but stored profile strings must resolve to the same fixed registry.
+The editor inserts tokens through its eight-button token picker. VISCA byte cells may be separated by commas or whitespace. Advanced users can edit JSON directly, but tokens are fixed and case-sensitive; arbitrary placeholder names, `printf` syntax, and expressions are rejected. The plugin owns each token's encoding, including the user-visible preset to protocol-index conversion.
 
 ## Initial variable registry
 
@@ -69,7 +82,7 @@ Variables are supplied by the action service from typed action arguments, valida
 | Variable | Type and source | Initial use |
 |---|---|---|
 | `camera.viscaAddress` | Bounded VISCA camera address; current app default is address 1 | VISCA address header |
-| `preset.index` | Integer within the profile's declared preset range | Store/recall preset |
+| `preset.index` | Protocol-native preset index within the profile's declared range; the action/driver layer derives it from SimpleCam's 1-based user-visible physical preset number | Store/recall preset |
 | `pan.direction`, `tilt.direction` | Enumerated direction values, not free-form text | Manual movement |
 | `pan.speed`, `tilt.speed`, `zoom.speed`, `focus.speed` | Normalized user speed mapped through the profile's supported range/curve | Manual movement commands |
 | `zoom.position` | Native zoom position mapped from the user-facing normalized control and profile min/max | Absolute zoom command |

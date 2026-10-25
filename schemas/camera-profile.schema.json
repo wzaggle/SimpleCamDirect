@@ -8,6 +8,7 @@
   "required": ["schemaVersion", "identity", "support", "capabilities", "connections", "commands"],
   "properties": {
     "schemaVersion": {"const": 1},
+    "derivedFrom": {"type": "string", "maxLength": 96, "description": "Source profile id for a user-created profile copy."},
     "identity": {
       "type": "object",
       "additionalProperties": false,
@@ -106,8 +107,8 @@
           "additionalProperties": false,
           "properties": {
             "presetCapacity": {"type": "integer", "minimum": 0, "maximum": 65535, "description": "Model's default number of usable physical preset slots. A configured camera may override this for a unit or firmware variant. The UI starts with five pages of 14 slots and exposes additional pages up to the effective capacity; slots with no mapped physical preset or beyond capacity are disabled and labeled ---."},
-            "presetMin": {"type": "integer", "minimum": 0, "maximum": 65535},
-            "presetMax": {"type": "integer", "minimum": 0, "maximum": 65535},
+            "presetMin": {"type": "integer", "minimum": 0, "maximum": 65535, "description": "Minimum protocol-native preset index. User-visible preset labels remain 1-based; the selected protocol adapter maps them into this range."},
+            "presetMax": {"type": "integer", "minimum": 0, "maximum": 65535, "description": "Maximum protocol-native preset index. User-visible preset labels remain 1-based; the selected protocol adapter maps them into this range."},
             "presetReserved": {"type": "array", "uniqueItems": true, "items": {"type": "integer", "minimum": 0, "maximum": 65535}},
             "panSpeed": {"$ref": "#/$defs/range"},
             "tiltSpeed": {"$ref": "#/$defs/range"},
@@ -207,9 +208,11 @@
         "whiteBalanceManual": {"$ref": "#/$defs/commandBinding"},
         "presetRecall": {"$ref": "#/$defs/commandBinding"},
         "presetStore": {"$ref": "#/$defs/commandBinding"},
+        "presetSpeedSet": {"$ref": "#/$defs/commandBinding"},
         "presetClear": {"$ref": "#/$defs/commandBinding"},
         "powerOn": {"$ref": "#/$defs/commandBinding"},
         "powerOff": {"$ref": "#/$defs/commandBinding"},
+        "powerInquiry": {"$ref": "#/$defs/commandBinding"},
         "backlightOn": {"$ref": "#/$defs/commandBinding"},
         "backlightOff": {"$ref": "#/$defs/commandBinding"},
         "backlightAuto": {"$ref": "#/$defs/commandBinding"},
@@ -258,7 +261,19 @@
         "minimum": {"type": "number"},
         "maximum": {"type": "number"},
         "units": {"type": "string", "maxLength": 40},
-        "encoding": {"type": "string", "maxLength": 100}
+        "encoding": {"type": "string", "maxLength": 100},
+        "nativeRange": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["minimum", "maximum", "units", "digitalZoomMode", "measuredAt"],
+          "properties": {
+            "minimum": {"type": "integer", "minimum": 0, "maximum": 65535},
+            "maximum": {"type": "integer", "minimum": 0, "maximum": 65535},
+            "units": {"const": "VISCA 16-bit position"},
+            "digitalZoomMode": {"enum": ["off", "on", "unknown"]},
+            "measuredAt": {"type": "string", "format": "date-time"}
+          }
+        }
       }
     },
     "commandBinding": {

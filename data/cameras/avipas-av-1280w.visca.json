@@ -1,0 +1,338 @@
+{
+  "schemaVersion": 1,
+  "identity": {
+    "id": "avipas.av-1280w.visca",
+    "manufacturer": "AViPAS",
+    "model": "AV-1280W",
+    "displayName": "AViPAS AV-1280W — Confirmed (VISCA/TCP)",
+    "family": "AV-1280 series",
+    "aliases": [
+      "AV-1280",
+      "AV-1280W/G"
+    ],
+    "hardwareRevisions": [],
+    "firmware": {
+      "supported": [],
+      "tested": [],
+      "excluded": [],
+      "notes": "Hardware confirmation applies to the maintainer-tested AV-1280W unit using raw VISCA over TCP. Firmware and hardware revision were not recorded; do not generalize this confirmation to every AV-1280/1281 variant."
+    }
+  },
+  "support": {
+    "status": "hardware-tested",
+    "maintainer": "SimpleCamPTZ project",
+    "lastReviewed": "2026-10-24",
+    "hardwareTest": {
+      "testedBy": "Project maintainer",
+      "testedAt": "2026-10-24",
+      "connectionId": "visca-tcp-raw",
+      "pluginVersion": "0.1.0",
+      "obsVersion": "32.2.1",
+      "platform": "windows-x64",
+      "notes": "Confirmed on the maintainer-tested AViPAS AV-1280W unit over raw VISCA/TCP at the configured endpoint. Camera controls, preset store/recall, and OBS preset-source actions were exercised. Firmware/hardware revision were not recorded. Preset recall speed is unsupported on this model. Digital zoom behavior was inconclusive on this unit and is not part of the confirmation claim."
+    },
+    "sources": [
+      {
+        "kind": "manufacturer-manual",
+        "title": "AViPAS HD Video Conferencing IP-Camera User Manual, AV-1280/1281 series",
+        "url": "https://www.avipas.com/_files/ugd/6b6a18_83e960b465f748c1ab4d79ce159b531d.pdf",
+        "revision": "2018-11-07",
+        "accessed": "2026-10-24",
+        "notes": "Primary source for VISCA command packets, serial baud rates, preset index range, network port defaults, and inquiry formats; command bindings were checked against real-camera behavior where applicable."
+      },
+      {
+        "kind": "other",
+        "title": "AViPAS AV-1280 product specifications",
+        "url": "https://www.avipas.com/product-page/av-1280-10x-sdi-ptz-camera-w-poe",
+        "accessed": "2026-10-24",
+        "notes": "Primary source for lens magnification, digital zoom, physical PTZ ranges, preset capacity, and supported interfaces."
+      }
+    ]
+  },
+  "capabilities": {
+    "operations": {
+      "panTilt": {
+        "supported": true
+      },
+      "panTiltSpeed": {
+        "supported": true
+      },
+      "home": {
+        "supported": true
+      },
+      "zoom": {
+        "supported": true
+      },
+      "zoomSpeed": {
+        "supported": true
+      },
+      "zoomAbsolute": {
+        "supported": true,
+        "reason": "VISCA direct zoom is documented; the model-specific native minimum and maximum still need to be measured before enabling a user-facing absolute-position slider."
+      },
+      "focus": {
+        "supported": true
+      },
+      "presetRecall": {
+        "supported": true
+      },
+      "presetRecallSpeed": {
+        "supported": false,
+        "reason": "Preset speed assignment is not listed in the AV-1280/1281 command table. The attempted 8x 01 7E 01 0B pp qq FF packet received VISCA Syntax Error 90 60 02. A real-camera test also confirmed that changing VV/WW in Pan/Tilt Stop does not change the speed of the next preset recall. Keep this capability disabled; the dock speed slider controls manual movement only. Other camera profiles may support a documented and tested model-specific method."
+      },
+      "presetStore": {
+        "supported": true
+      },
+      "presetClear": {
+        "supported": true
+      },
+      "power": {
+        "supported": true,
+        "reason": "VISCA Off is documented as standby; retain the UI's deliberate safety confirmation."
+      },
+      "backlight": {
+        "supported": true
+      },
+      "whiteBalance": {
+        "supported": true
+      },
+      "exposureCompensation": {
+        "supported": true
+      },
+      "positionInquiry": {
+        "supported": true
+      },
+      "zoomInquiry": {
+        "supported": true
+      }
+    },
+    "limits": {
+      "presetCapacity": 255,
+      "presetMin": 0,
+      "presetMax": 254,
+      "presetReserved": [],
+      "panSpeed": {
+        "minimum": 1,
+        "maximum": 24,
+        "units": "VISCA speed byte",
+        "encoding": "0x01 to 0x18; manual describes low to high"
+      },
+      "tiltSpeed": {
+        "minimum": 1,
+        "maximum": 20,
+        "units": "VISCA speed byte",
+        "encoding": "0x01 to 0x14; manual describes low to high"
+      },
+      "zoomSpeed": {
+        "minimum": 0,
+        "maximum": 15,
+        "units": "VISCA speed nibble",
+        "encoding": "0x0 low to 0xF high; map the UI speed scale in the driver"
+      },
+      "speedCurve": "vendor-defined",
+      "zoom": {
+        "minimum": 0,
+        "maximum": 1,
+        "units": "normalized UI coordinate only",
+        "encoding": "Physical/native mapping is not specified yet; optical magnification is 10x and digital magnification is up to 5x when enabled."
+      }
+    }
+  },
+  "connections": [
+    {
+      "id": "visca-tcp-raw",
+      "label": "VISCA over IP (TCP, raw VISCA)",
+      "protocol": "visca",
+      "transport": "tcp",
+      "framing": "raw-visca",
+      "defaultPort": 3001,
+      "portRequired": true,
+      "addressing": {
+        "mode": "visca-address-byte",
+        "default": "1",
+        "minimum": 1,
+        "maximum": 7,
+        "ipAddressForced": false
+      },
+      "network": {
+        "ipVersions": [
+          "ipv4"
+        ],
+        "authentication": "none",
+        "tls": false,
+        "discovery": "manual"
+      },
+      "response": {
+        "policy": "ack-and-completion",
+        "timeoutMs": 5000,
+        "retryCount": 0,
+        "serializePerCamera": true,
+        "notes": "The current SimpleCam setup has been used successfully at TCP port 1259. The AViPAS manual lists configurable VISCA port default 3001, but does not identify TCP versus UDP in the port table. Keep the port editable and verify this exact unit's transport/port settings."
+      },
+      "setupNotes": [
+        "The current installation endpoint 192.168.1.4:1259 belongs in OBS camera-slot settings, not this reusable profile.",
+        "The manual lists factory IP 192.168.5.163 and VISCA port 3001; the camera may have been reconfigured.",
+        "This profile assumes the working SimpleCam path's raw VISCA TCP framing, to be reconfirmed against the current camera."
+      ]
+    },
+    {
+      "id": "visca-rs232",
+      "label": "VISCA over RS-232",
+      "protocol": "visca",
+      "transport": "serial-rs232",
+      "framing": "raw-visca",
+      "portRequired": false,
+      "addressing": {
+        "mode": "visca-address-byte",
+        "default": "1",
+        "minimum": 1,
+        "maximum": 7,
+        "ipAddressForced": false
+      },
+      "serial": {
+        "baudRates": [
+          2400,
+          4800,
+          9600,
+          115200
+        ],
+        "defaultBaudRate": 9600,
+        "dataBits": 8,
+        "parity": "none",
+        "stopBits": 1,
+        "flowControl": "none",
+        "wiringNotes": "AV-1280/1281 manual lists an 8-pin mini-DIN RS-232 I/O interface and VISCA. Confirm the exact cable pinout and whether this installation uses the camera's RS-232 input or cascade output."
+      },
+      "response": {
+        "policy": "ack-and-completion",
+        "timeoutMs": 5000,
+        "retryCount": 0,
+        "serializePerCamera": true,
+        "notes": "Manual documents VISCA ACK and completion responses. Serial implementation and reply parsing still require validation."
+      },
+      "setupNotes": [
+        "Camera menu supports VISCA address 1 through 7; default is 1.",
+        "Supported baud rates documented by AViPAS: 2400, 4800, 9600, and 115200."
+      ]
+    }
+  ],
+  "commands": {
+    "movePanTilt": {
+      "driverOperation": "visca.panTilt",
+      "template": "8{A} 01 06 01 {PS} {TS} {PD} {TD} FF"
+    },
+    "stopPanTilt": {
+      "driverOperation": "visca.panTiltStop",
+      "template": "8{A} 01 06 01 {PS} {TS} 03 03 FF"
+    },
+    "home": {
+      "driverOperation": "visca.home",
+      "template": "8{A} 01 06 04 FF"
+    },
+    "zoomIn": {
+      "driverOperation": "visca.zoomIn",
+      "template": "8{A} 01 04 07 2{ZS} FF"
+    },
+    "zoomOut": {
+      "driverOperation": "visca.zoomOut",
+      "template": "8{A} 01 04 07 3{ZS} FF"
+    },
+    "zoomStop": {
+      "driverOperation": "visca.zoomStop",
+      "template": "8{A} 01 04 07 00 FF"
+    },
+    "zoomAbsolute": {
+      "driverOperation": "visca.zoomAbsolute",
+      "template": "8{A} 01 04 47 {ZP} FF"
+    },
+    "focusNear": {
+      "driverOperation": "visca.focusNear",
+      "template": "8{A} 01 04 08 03 FF"
+    },
+    "focusFar": {
+      "driverOperation": "visca.focusFar",
+      "template": "8{A} 01 04 08 02 FF"
+    },
+    "focusStop": {
+      "driverOperation": "visca.focusStop",
+      "template": "8{A} 01 04 08 00 FF"
+    },
+    "focusAuto": {
+      "driverOperation": "visca.focusAuto",
+      "template": "8{A} 01 04 38 02 FF"
+    },
+    "focusManual": {
+      "driverOperation": "visca.focusManual",
+      "template": "8{A} 01 04 38 03 FF"
+    },
+    "whiteBalanceAuto": {
+      "driverOperation": "visca.whiteBalanceAuto",
+      "template": "8{A} 01 04 35 00 FF"
+    },
+    "whiteBalanceManual": {
+      "driverOperation": "visca.whiteBalanceManual",
+      "template": "8{A} 01 04 35 05 FF"
+    },
+    "presetRecall": {
+      "driverOperation": "visca.presetRecall",
+      "template": "8{A} 01 04 3F 02 {PI} FF"
+    },
+    "presetStore": {
+      "driverOperation": "visca.presetStore",
+      "template": "8{A} 01 04 3F 01 {PI} FF",
+      "destructive": true
+    },
+    "presetClear": {
+      "driverOperation": "visca.presetClear",
+      "template": "8{A} 01 04 3F 00 {PI} FF",
+      "destructive": true
+    },
+    "powerOn": {
+      "driverOperation": "visca.powerOn",
+      "template": "8{A} 01 04 00 02 FF"
+    },
+    "powerOff": {
+      "driverOperation": "visca.powerOff",
+      "template": "8{A} 01 04 00 03 FF",
+      "destructive": true
+    },
+    "powerInquiry": {
+      "driverOperation": "visca.powerInquiry",
+      "template": "8{A} 09 04 00 FF"
+    },
+    "backlightOn": {
+      "driverOperation": "visca.backlightOn",
+      "template": "8{A} 01 04 33 02 FF"
+    },
+    "backlightOff": {
+      "driverOperation": "visca.backlightOff",
+      "template": "8{A} 01 04 33 03 FF"
+    },
+    "exposureCompOn": {
+      "driverOperation": "visca.exposureCompOn",
+      "template": "8{A} 01 04 3E 02 FF"
+    },
+    "exposureCompOff": {
+      "driverOperation": "visca.exposureCompOff",
+      "template": "8{A} 01 04 3E 03 FF"
+    },
+    "positionInquiry": {
+      "driverOperation": "visca.positionInquiry",
+      "template": "8{A} 09 06 12 FF"
+    },
+    "zoomInquiry": {
+      "driverOperation": "visca.zoomInquiry",
+      "template": "8{A} 09 04 47 FF"
+    }
+  },
+  "notes": [
+    "DRAFT ONLY: schema shape and manufacturer command bytes are captured; this JSON has not been executed by a profile-driven runtime or tested as a selectable catalog entry.",
+    "AViPAS documents 255 memories as VISCA memory numbers 0 through 254. SimpleCam presents physical preset numbers 1 through 255 to users; the VISCA driver encodes physical preset N as protocol memory N−1. This is a standard boundary conversion, not a profile incompatibility; add packet fixtures for presets 1 and 255.",
+    "The manual documents absolute zoom as four VISCA nibbles but does not state the AV-1280W's actual endpoint values. The planned Camera Definition and Configuration Tool Zoom Calibrate test should query until tele position stops increasing, stop movement, and record the endpoint for the current user-configured digital-zoom mode. Users change DZoom through the camera's web/direct interface; SimpleCam does not alter it. The product lists 10x optical and 5x digital zoom; the manual says digital zoom is off by default.",
+    "Legacy SimpleCamQt and current Direct packet code disagree with the official command table: focus Near/Far byte meanings are reversed; focus stop is documented as 04 08 00, not 04 07 00; exposure compensation is documented as command 04 3E, not the backlight command 04 33. Test each on this camera before migration.",
+    "The old shared command file encodes absolute zoom using two decimal-like values followed by 01 00. That does not match the AViPAS manual's four-nibble direct-zoom format. Preserve the working manual zoom controls until endpoint inquiry and packet tests confirm the proper conversion.",
+    "Each command is represented by one VISCA packet template. presetStore stores the current position only; presetClear remains a separate command. presetRecall contains only the recall packet; zoomInquiry remains separate so the runtime can query position after recall without conflating the two commands. The AV-1280/1281 manual does not list the 7E 01 0B preset-speed extension; a direct test returned Syntax Error 90 60 02, so presetRecallSpeed is unsupported for this profile. Other camera profiles may enable it when documented and verified.",
+    "The manual lists default network IP 192.168.5.163 and VISCA port 3001. The connected user camera is configured at 192.168.1.4:1259 and has worked with the existing app; endpoint values are per installation and must not be copied into a shared camera profile.",
+    "VISCA power-off means standby. Preset clear/store and power-off remain safety-confirmed actions in the UI."
+  ]
+}

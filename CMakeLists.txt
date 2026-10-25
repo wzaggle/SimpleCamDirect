@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.28...3.30)
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/common/bootstrap.cmake" NO_POLICY_SCOPE)
 
-project(${_name} VERSION ${_version} LANGUAGES C CXX)
+project(SimpleCamPTZ VERSION ${_version} LANGUAGES C CXX)
 
 option(ENABLE_FRONTEND_API "Use the OBS frontend API for docks and scene selection" ON)
 option(ENABLE_QT "Use Qt widgets for OBS docks" ON)
@@ -15,9 +15,11 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-add_library(${CMAKE_PROJECT_NAME} MODULE
+add_library(simplecamptz MODULE
   src/plugin-main.cpp
   src/camera_runtime.cpp
+  src/camera_profile.cpp
+  src/profile_test_tool.cpp
   src/camera_docks.cpp
   src/preset_source.cpp
   resources/simplecamdirect.qrc
@@ -32,7 +34,7 @@ if(TARGET plugin-support)
   target_link_libraries(plugin-support PRIVATE OBS::libobs)
 endif()
 
-target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
+target_link_libraries(simplecamptz PRIVATE
   OBS::libobs
   OBS::obs-frontend-api
   Qt6::Core
@@ -40,21 +42,54 @@ target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
   Qt6::Network
 )
 
-set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES
+set_target_properties(simplecamptz PROPERTIES
   AUTOMOC ON
   AUTOUIC ON
   AUTORCC ON
 )
 
-target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE src)
-target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE QT_NO_KEYWORDS)
+target_include_directories(simplecamptz PRIVATE src)
+target_compile_definitions(simplecamptz PRIVATE QT_NO_KEYWORDS)
 
-set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_name})
+set_target_properties_plugin(simplecamptz PROPERTIES OUTPUT_NAME ${_name})
+
+# Visual Studio's Open Folder CMake view does not always expose CMake's
+# generated INSTALL target consistently. Keep an explicit, discoverable target
+# for the normal build-then-install workflow.
+add_custom_target(install-simplecamptz
+  COMMAND "${CMAKE_COMMAND}" --install "${CMAKE_BINARY_DIR}" --config "$<CONFIG>"
+  COMMENT "Install SimpleCamPTZ and its resources"
+  USES_TERMINAL
+  VERBATIM
+)
+add_dependencies(install-simplecamptz simplecamptz)
+
+if(WIN32)
+  add_custom_target(package-simplecamptz-installer
+    COMMAND powershell.exe -NoProfile -ExecutionPolicy Bypass
+      -File "${CMAKE_CURRENT_SOURCE_DIR}/build-installer.ps1"
+      -BuildDir "${CMAKE_BINARY_DIR}" -Configuration "$<CONFIG>"
+    COMMENT "Stage and package the SimpleCamPTZ Windows installer"
+    USES_TERMINAL
+    VERBATIM
+  )
+  add_dependencies(package-simplecamptz-installer simplecamptz)
+endif()
 
 include(CTest)
 if(BUILD_TESTING)
-  add_executable(simplecamdirect_packet_tests tests/visca_packets_test.cpp)
-  target_include_directories(simplecamdirect_packet_tests PRIVATE src)
-  target_compile_features(simplecamdirect_packet_tests PRIVATE cxx_std_17)
-  add_test(NAME simplecamdirect_packet_tests COMMAND simplecamdirect_packet_tests)
+  add_executable(simplecamptz_packet_tests tests/visca_packets_test.cpp)
+  target_include_directories(simplecamptz_packet_tests PRIVATE src)
+  target_compile_features(simplecamptz_packet_tests PRIVATE cxx_std_17)
+  add_test(NAME simplecamptz_packet_tests COMMAND simplecamptz_packet_tests)
+
+  add_executable(simplecamptz_profile_tests
+    tests/camera_profile_test.cpp
+    src/camera_profile.cpp
+  )
+  target_include_directories(simplecamptz_profile_tests PRIVATE src)
+  target_link_libraries(simplecamptz_profile_tests PRIVATE Qt6::Core)
+  target_compile_features(simplecamptz_profile_tests PRIVATE cxx_std_17)
+  add_test(NAME simplecamptz_profile_tests
+    COMMAND simplecamptz_profile_tests "${CMAKE_CURRENT_SOURCE_DIR}/data/cameras/avipas-av-1280w.visca.json")
 endif()

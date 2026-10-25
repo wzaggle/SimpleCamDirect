@@ -1,17 +1,17 @@
-# SimpleCamQt to SimpleCam Direct 0.1.x parity checklist
+# SimpleCamQt to SimpleCamPTZ 0.1.x parity checklist
 
-Use this checklist to compare the established SimpleCamQt + OBS Lua workflow with the new native SimpleCam Direct source and dock. Keep the same Windows system, OBS version, AViPAS AV-1280W, firmware, camera connection, and preset state. SimpleCam Direct's source and dock share the same in-process action service. SimpleCamQt and the camera web interface remain independent clients and may also control the camera; their requests are not globally ordered with Direct's.
+Use this checklist to compare the established SimpleCamQt + OBS Lua workflow with the new native SimpleCamPTZ source and dock. Keep the same Windows system, OBS version, AViPAS AV-1280W, firmware, camera connection, and preset state. SimpleCamPTZ's source and dock share the same in-process action service. SimpleCamQt and the camera web interface remain independent clients and may also control the camera; their requests are not globally ordered with Direct's.
 
-Record for every row: SimpleCamQt result, SimpleCam Direct result, pass/fail, notes, and any intentional difference. Do not call a difference a regression until the expected behavior is agreed.
+Record for every row: SimpleCamQt result, SimpleCamPTZ result, pass/fail, notes, and any intentional difference. Do not call a difference a regression until the expected behavior is agreed.
 
 ## Setup and shared action path
 
 - [ ] Both products can be installed and loaded in the same OBS instance, and both can actively command the same camera.
 - [ ] The native source type has a distinct OBS id; existing Lua/file-bridge sources still load and retain their settings.
 - [ ] A Direct scene source and a Direct dock action invoke the same typed action service and per-camera queue; no file or IPC bridge is involved inside Direct.
-- [ ] SimpleCam Direct connects to the configured AViPAS over the verified VISCA transport and reports failures clearly.
+- [ ] SimpleCamPTZ connects to the configured AViPAS over the verified VISCA transport and reports failures clearly.
 - [ ] Each product retains its own camera/preset settings; both may point to the same camera endpoint without overwriting the other's configuration.
-- [ ] The camera web interface, SimpleCamQt, and SimpleCam Direct each move the camera successfully without requiring the other clients to exit or release ownership.
+- [ ] The camera web interface, SimpleCamQt, and SimpleCamPTZ each move the camera successfully without requiring the other clients to exit or release ownership.
 - [ ] Repeated and consecutive Direct scene-source requests are all delivered to the Direct action service in OBS dispatch order; the final position matches the last Direct request.
 - [ ] SimpleCamQt and the web interface can also control the same camera, with no claim of global ordering across those separate clients.
 
@@ -65,9 +65,9 @@ Record for every row: SimpleCamQt result, SimpleCam Direct result, pass/fail, no
 
 - [ ] Run a representative service with repeated scene transitions and manual controls; record hangs, missed commands, errors, and camera response differences.
 - [ ] Restart OBS and repeat core tests.
-- [ ] Record exact OBS version, SimpleCamQt version, SimpleCam Direct build id, Windows version, camera firmware, connection, and test date.
+- [ ] Record exact OBS version, SimpleCamQt version, SimpleCamPTZ build id, Windows version, camera firmware, connection, and test date.
 - [ ] Attach redacted logs or traces for any failure; do not include credentials or private endpoint details in public reports.
 
 ## Acceptance
 
-SimpleCam Direct 0.1.x passes when every in-scope function has a recorded result, critical camera actions and scene behavior match the agreed SimpleCamQt behavior, no unintended camera movement occurs, and known differences are documented. This gate establishes only Windows + VISCA + AViPAS AV-1280W behavior; it does not establish support for another camera, OS, transport, or protocol.
+SimpleCamPTZ 0.1.x passes when every in-scope function has a recorded result, critical camera actions and scene behavior match the agreed SimpleCamQt behavior, no unintended camera movement occurs, and known differences are documented. This gate establishes only Windows + VISCA + AViPAS AV-1280W behavior; it does not establish support for another camera, OS, transport, or protocol.

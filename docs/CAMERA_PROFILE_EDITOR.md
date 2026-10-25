@@ -4,7 +4,7 @@
 
 The OBS plugin should include a profile editor so a user can tune an existing camera definition, verify custom command sequences against real hardware, and keep a successful variation as a new profile. This shortens the debug loop for a new camera model while protecting the shipped definition and the user's saved camera connection.
 
-This is a product and safety contract for the later profile-editor milestone in [`DEVELOPMENT_ROADMAP.md`](DEVELOPMENT_ROADMAP.md). It does not imply the editor exists in the current SimpleCamQt or file-bridge plugin, or that it is part of the first SimpleCam Direct 0.1.x vertical slice.
+This is a product and safety contract for the later profile-editor milestone in [`DEVELOPMENT_ROADMAP.md`](DEVELOPMENT_ROADMAP.md). It does not imply the editor exists in the current SimpleCamQt or file-bridge plugin, or that it is part of the first SimpleCamPTZ 0.1.x vertical slice.
 
 ## OBS tool boundaries
 
@@ -15,6 +15,8 @@ Keep three user-facing responsibilities distinct:
 - **Camera Definition and Configuration Tool:** maintain reusable camera model profiles. Provide structured and direct JSON editing, validation, profile duplication, import/export, command testing, and optional startup-sequence editing.
 
 The Camera Selection Tool and Camera Definition and Configuration Tool are separate OBS Tools windows. They may link to each other, but profile data and installation connection data stay separate. The current Cameras dock is an interim implementation surface for the initial vertical slice; the target design moves installation selection/configuration to its tool and model-profile authoring to its own tool.
+
+The Camera Definition and Configuration Tool is not a general replacement for the camera's web/direct setup interface. It captures only the model data SimpleCam needs for its own supported controls and scene-source actions. Camera setup such as digital-zoom enablement, color/image tuning, and vendor-specific move curves remains under the user's camera-side configuration unless a specific setting is later made an explicit SimpleCam action.
 
 ## Keep three kinds of data separate
 
@@ -41,9 +43,36 @@ There is one profile format for shipped and user-created profiles. If a model or
 
 The in-plugin authoring form starts with VISCA. Its first operation set is defined in [`CAMERA_ACTION_CONTRACT.md`](CAMERA_ACTION_CONTRACT.md); users map those functions to supported VISCA commands and sequences. VISCA command definitions may use fixed byte literals plus registered typed placeholders and output formats; see [`PROFILE_VARIABLES.md`](PROFILE_VARIABLES.md). ONVIF and NDI PTZ are later editor modes and remain limited to PTZ functions. Their forms use protocol-specific structured request fields (including NDI metadata structures) rather than asking users to enter VISCA-style raw hex or raw SOAP.
 
+## First-pass Zoom Calibrate test
+
+Include a bounded **Zoom Calibrate** hardware test in the first Camera Definition and Configuration Tool pass. Run it against an explicitly selected, connected camera slot, but save the resulting model limit into the profile draft rather than silently creating a per-slot capability override.
+
+For VISCA cameras that support zoom inquiry, the first pass should:
+
+1. Show the target camera and the current digital-zoom mode; require the operator to confirm the camera can safely zoom to telephoto.
+2. Query and retain the starting zoom position.
+3. Start a continuous Zoom Tele command once at the configured calibration speed.
+4. Continue issuing serialized zoom-position inquiries while zooming. When valid replies stop increasing for the configured stability window, immediately issue Zoom Stop and make one final inquiry to capture the endpoint.
+5. Restore the original zoom position after recording the result. If restore fails, report that clearly and leave the camera stopped.
+6. Save the measured native endpoint only to the unsaved profile draft, alongside firmware, digital-zoom mode, connection variant, timestamp, and the sent/reply trace. The user explicitly saves or discards the profile change.
+
+The polling loop must have a conservative timeout, a visible Cancel/Stop control, and cleanup that sends Zoom Stop on every exit path, including a timeout, inquiry error, connection loss, or cancellation. Do not keep retrying an unacknowledged move. The calibration transaction must permit inquiries while the continuous zoom drive is active; it must not block the queue waiting for move completion before it can send the inquiries or stop command. If the selected camera rejects inquiries during movement, fail safely and record that result rather than switching to an unbounded command loop.
+
+For a camera with a digital-zoom toggle, the user sets that mode through the camera's own web/direct interface before calibration. SimpleCam must not toggle digital zoom or other camera setup values. The calibration measures and labels the endpoint for the current mode only. If the profile needs both the optical-only endpoint and the combined endpoint, the user can configure each mode externally and run the measurement again; the tool must not infer one endpoint from the other. A wide-end reading of zero may be used as the expected minimum only after the tool has confirmed it by inquiry.
+
+## Zoom Calibrate acceptance checks
+
+- The Sent/Received trace shows the initial inquiry, one continuous tele-start request, every position inquiry, the stop request, final inquiry, and restore request/reply.
+- Calibration stops only after valid position replies have ceased increasing for the stability window; unchanged, malformed, missing, or error replies are not treated as a successful endpoint.
+- Timeout, user cancellation, and connection loss all issue a best-effort stop and do not save a new profile value.
+- A successful run saves the measured endpoint to the draft with digital-zoom mode, camera firmware, connection variant, and test status; it does not update the active profile until explicitly saved/applied.
+- The original zoom position is restored, or the UI reports that restoration failed and the camera remains stopped.
+- Digital zoom is never changed by the calibration; the endpoint is tagged with the externally configured mode, and separate mode endpoints require separate operator-configured runs.
+- The calibration does not change preset data, pan/tilt position, camera power, or other profile settings.
+
 ## Optional startup sequence
 
-A camera profile may define an optional ordered sequence of setup operations for model features that SimpleCam Direct does not expose as regular Controls Dock actions. Examples include selecting a default speed or setting/clearing a vendor-specific feature. An empty or absent sequence is a no-op.
+A camera profile may define an optional ordered sequence of setup operations for model features that SimpleCamPTZ does not expose as regular Controls Dock actions. Examples include selecting a default speed or setting/clearing a vendor-specific feature. An empty or absent sequence is a no-op.
 
 - Run steps in order after the configured slot's camera connection becomes ready, including after reconnect; provide an explicit **Run startup sequence** action for deliberate reapplication.
 - Use only validated, driver-supported operations, typed values, the selected profile's normal transport, and the normal per-camera serialized queue. The sequence is data, never executable code or an unrestricted raw-packet escape hatch.

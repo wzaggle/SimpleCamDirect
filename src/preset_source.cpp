@@ -31,10 +31,13 @@ int cameraIndexFromValue(const char *value)
 {
 	const QString camera = QString::fromUtf8(value ? value : "1").trimmed();
 	bool ok = false;
-	const int numeric = camera.toInt(&ok);
-	if (ok)
-		return numeric == 2 ? 1 : 0;
-	return camera.endsWith(QLatin1Char('2')) ? 1 : 0;
+	int numeric = camera.toInt(&ok);
+	if (!ok) {
+		const int separator = camera.lastIndexOf(QLatin1Char(' '));
+		if (separator >= 0)
+			numeric = camera.mid(separator + 1).toInt(&ok);
+	}
+	return ok && numeric >= 1 && numeric <= CameraSlotCount ? numeric - 1 : 0;
 }
 
 std::mutex liveSourcesMutex;
@@ -199,7 +202,7 @@ void sourceDestroy(void *opaque)
 
 const char *sourceName(void *)
 {
-	return obs_module_text("SimpleCamDirect.PresetSource");
+	return obs_module_text("SimpleCamPTZ.PresetSource");
 }
 
 void sourceDefaults(obs_data_t *settings)
@@ -216,7 +219,7 @@ void populatePresetList(obs_property_t *preset, int cameraIndex)
 	const CameraRuntime *runtime = cameraRuntime(cameraIndex);
 	const int activePage = runtime ? runtime->activePage() : 0;
 	for (int i = 0; i < PresetCatalog::SlotsPerPage; ++i) {
-		const bool usable = !runtime || runtime->presets().hasUsablePreset(activePage, i);
+		const bool usable = !runtime || runtime->hasUsablePreset(activePage, i);
 		QString label = runtime ? runtime->presets().presetLabel(activePage, i) : QString();
 		if (!usable)
 			label = QStringLiteral("---");
@@ -241,9 +244,9 @@ obs_properties_t *sourceProperties(void *opaque)
 	const auto *sourceData = static_cast<const PresetSourceData *>(opaque);
 	const int currentCamera = sourceData ? sourceData->cameraIndex : 0;
 	auto *properties = obs_properties_create();
-	auto *camera = obs_properties_add_list(properties, "camera", obs_module_text("SimpleCamDirect.Camera"),
+	auto *camera = obs_properties_add_list(properties, "camera", obs_module_text("SimpleCamPTZ.Camera"),
 						       OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_STRING);
-	for (int index = 0; index < 2; ++index) {
+	for (int index = 0; index < CameraSlotCount; ++index) {
 		const CameraRuntime *runtime = cameraRuntime(index);
 		const QByteArray label = (runtime ? runtime->cameraName() : QStringLiteral("Camera %1").arg(index + 1)).toUtf8();
 		const QByteArray value = QStringLiteral("Camera %1").arg(index + 1).toUtf8();
@@ -251,16 +254,16 @@ obs_properties_t *sourceProperties(void *opaque)
 	}
 	obs_property_set_modified_callback(camera, cameraSelectionChanged);
 
-	auto *preset = obs_properties_add_list(properties, "preset", obs_module_text("SimpleCamDirect.Preset"),
+	auto *preset = obs_properties_add_list(properties, "preset", obs_module_text("SimpleCamPTZ.Preset"),
 						OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_INT);
 	populatePresetList(preset, currentCamera);
 
-	auto *mode = obs_properties_add_list(properties, "trigger_mode", obs_module_text("SimpleCamDirect.Trigger"),
+	auto *mode = obs_properties_add_list(properties, "trigger_mode", obs_module_text("SimpleCamPTZ.Trigger"),
 						OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_INT);
-	obs_property_list_add_int(mode, obs_module_text("SimpleCamDirect.Program"), kProgramMode);
-	obs_property_list_add_int(mode, obs_module_text("SimpleCamDirect.Preview"), kPreviewMode);
-	obs_property_list_add_int(mode, obs_module_text("SimpleCamDirect.Both"), kBothMode);
-	obs_properties_add_int_slider(properties, "delay_seconds", obs_module_text("SimpleCamDirect.Delay"), 0, 600, 1);
+	obs_property_list_add_int(mode, obs_module_text("SimpleCamPTZ.Program"), kProgramMode);
+	obs_property_list_add_int(mode, obs_module_text("SimpleCamPTZ.Preview"), kPreviewMode);
+	obs_property_list_add_int(mode, obs_module_text("SimpleCamPTZ.Both"), kBothMode);
+	obs_properties_add_int_slider(properties, "delay_seconds", obs_module_text("SimpleCamPTZ.Delay"), 0, 600, 1);
 	return properties;
 }
 
@@ -296,13 +299,13 @@ bool dispatchSceneItem(obs_scene_t *scene, obs_sceneitem_t *item, void *opaque)
 				const char *sceneName = sceneSource ? obs_source_get_name(sceneSource) : "<unknown>";
 				const char *presetSourceName = obs_source_get_name(source);
 				obs_log(LOG_INFO,
-					"[SimpleCamDirect PresetFadeDiag] stage=obs-source-request camera=1 group=1 button=1 "
+					"[SimpleCamPTZ PresetFadeDiag] stage=obs-source-request camera=1 group=1 button=1 "
 					"scene=\"%s\" source=\"%s\" delay_ms=%d trigger_mode=%d",
 					sceneName ? sceneName : "<unknown>", presetSourceName ? presetSourceName : "<unknown>", delay, mode);
 			}
 			runtime->recallLogicalPreset(preset, delay, [preset](bool ok, const QString &message) {
 				if (!ok)
-					obs_log(LOG_WARNING, "SimpleCam Direct preset %d failed: %s", preset, message.toUtf8().constData());
+					obs_log(LOG_WARNING, "SimpleCamPTZ preset %d failed: %s", preset, message.toUtf8().constData());
 			}, CameraRuntime::PresetRecallOrigin::ObsSource);
 		}
 	}

@@ -1,11 +1,11 @@
-# SimpleCam Direct project decisions
+# SimpleCamPTZ project decisions
 
-This document records the product decisions from the initial SimpleCam Direct planning conversation. Update it when the maintainer changes scope or behavior.
+This document records the product decisions from the initial SimpleCamPTZ planning conversation. Update it when the maintainer changes scope or behavior.
 
 ## Project identity
 
 - GitHub repository name: `SimpleCamDirect`.
-- Product display name: **SimpleCam Direct for OBS**.
+- Product display name: **SimpleCamPTZ for OBS**.
 - The project is independent and human-maintained, with optional AI/coding-agent assistance. Public documentation must not imply ChatGPT endorsement.
 - This is a new OBS plugin. It is distinct from the SimpleCamQt desktop application and the existing SimpleCam OBS file-bridge plugin.
 - License selection is still open; do not invent a license or add one without a maintainer decision.
@@ -24,14 +24,16 @@ Hardware should be inexpensive, lightweight, and durable. Software should be pre
 - The **Controls Dock** is the live Camera Preset Manager: select which configured camera slots its cards control, move cameras, recall/store presets, and manage preset groups, names, and visual order. Keep it an OBS dock.
 - The **Camera Selection Tool** assigns a reusable profile to one of up to five installation slots and stores only installation-specific details for that physical camera, such as display name, network address/port, or serial device and settings. It tests and reports the connection. The existing Cameras dock is an interim first-sprint surface for these settings, not the target design.
 - The **Camera Definition and Configuration Tool** manages reusable model profiles: model capabilities, supported protocol and transport definitions, command bindings, preset capacity, zoom limits, and optional startup sequences. It supports direct JSON and structured editing, validation, duplicate/Save As, import/export, and command testing. This is an OBS Tools window, separate from both the Controls Dock and Camera Selection Tool.
+- SimpleCam's camera tools are not a general camera setup console. Users continue to manage digital zoom enablement, color/image tuning, move curves, and the camera's many other model-specific setup values through its own web/direct interface. SimpleCam profiles contain only the model/protocol facts and settings needed for SimpleCam's supported actions; a test such as Zoom Calibrate reads the current camera configuration but does not change it.
 - An OBS preset source stores its camera and logical preview number (1–14), not a group or physical preset mapping. While editing, it obtains names for the currently selected Preview Group. At runtime, the shared preview action reads the active Preview Group and resolves the button through that camera's page map. The default map is sequential and equivalent to `Preview + ((Preview Group - 1) * 14)`; custom layouts may distribute presets across pages. The user selects the group they intend the source to recall.
 - A camera profile defines its usable preset capacity and other model capabilities. Do not add per-camera capability overrides: if an exception is needed, duplicate the profile as a distinct model/variant profile (for example, AViPAS 1280X). Start with five 14-slot pages. The existing top `PG` button cycles through pages; do not add selector radio buttons. In Settings, `+` and a trash icon sit beside the active page-description field to add or remove a page. Remove a page only when all 14 button labels are blank and at least five pages will remain. A `Clear` button beside `Swap` in Settings blanks the selected button label; it does not erase the camera's stored preset. Control mode offers Set and Rename only. Users can distribute available physical presets across any page slots; unassigned/out-of-capacity slots are dimmed, disabled, and labeled `---`. A 25-preset profile can use any distribution across five pages. A 255-preset profile can use 19 pages.
-- Compare SimpleCamQt and SimpleCam Direct side by side during testing. SimpleCam Direct's dock and scene sources are one plugin and share one in-process action service; they do not communicate with each other through files or another IPC mechanism.
+- In the Controls Dock, Set immediately stores the current camera position in the selected physical preset, replacing any existing position without a confirmation dialog. Profile Test remains separately confirmation-gated for its destructive test commands.
+- Compare SimpleCamQt and SimpleCamPTZ side by side during testing. SimpleCamPTZ's dock and scene sources are one plugin and share one in-process action service; they do not communicate with each other through files or another IPC mechanism.
 
 ## Shared in-process action path and independent clients
 
-- SimpleCam Direct scene sources and its camera dock invoke the same in-process camera action service and per-camera queue. No files, sockets, or other IPC connect these plugin components.
-- SimpleCamQt, SimpleCam Direct, and the camera's own web interface remain independent valid clients and may command the same network camera. SimpleCam Direct must not place an exclusive ownership lock on a network camera. Separate clients are not globally serialized with each other; only Direct's own transactions are ordered by its queue.
+- SimpleCamPTZ scene sources and its camera dock invoke the same in-process camera action service and per-camera queue. No files, sockets, or other IPC connect these plugin components.
+- SimpleCamQt, SimpleCamPTZ, and the camera's own web interface remain independent valid clients and may command the same network camera. SimpleCamPTZ must not place an exclusive ownership lock on a network camera. Separate clients are not globally serialized with each other; only Direct's own transactions are ordered by its queue.
 - OBS scene-source events are submitted to the Direct service in OBS dispatch order. Never suppress, merge, or deduplicate repeated Direct preset recalls; a later source may intentionally move the camera again or back to an earlier preset. Do not claim deterministic ordering between Direct and legacy/file-bridge requests from separate clients.
 - Serial-port sharing is platform/adapter dependent and is a separate OS-level limitation; it does not constrain TCP/IP camera clients.
 
@@ -69,6 +71,8 @@ The work is expected to progress over several months. Do not claim camera or pla
 - VISCA is first. ONVIF and NDI, when added, are PTZ-only initially. Protocols remain separate adapters over semantic camera actions.
 - Command templates can use only registered typed variables and allowlisted formatters. JSON is configuration, not an executable programming language.
 - Define and test the initial semantic actions: home, pan/tilt, zoom, preset store/recall, focus mode and direction, white-balance mode, backlight, exposure compensation, and camera power/standby as supported by the model. Manual movement and per-preset transition speed should be represented only where the profile and driver support them.
+- Manual pan/tilt speed does not imply preset recall speed. The AV-1280W test found that varying the speed fields in the Pan/Tilt Stop packet did not change the speed of a subsequent preset recall; keep preset recall speed unsupported for this profile unless a separately tested method is found.
+- **Future design note — software-paced preset transitions:** When a user stores a preset through SimpleCam, query the camera's current pan/tilt position and persist those coordinates alongside that camera's physical preset mapping. For a later paced recall, use the saved coordinates as the estimated destination and send interpolated absolute pan/tilt positions at a speed-controlled rate. Treat the interpolated path as the main move and aim to reach roughly 99% of the target; issue the camera's native preset recall as the final lock-in step, expected to finish the small remaining distance without a noticeable jump. The camera's stored preset remains authoritative. Once movement completes, query the actual pan/tilt position and refresh the saved coordinates, allowing the estimate to self-correct over repeated recalls. If the estimate is stale enough to make the final correction visible, that is a known failure mode to test and reduce. When coordinates are unavailable or the profile lacks the required absolute-move/query support, use ordinary native recall. This is a future capability, not part of the current AV-1280W implementation.
 - A profile editor should show the most recent command sent and reply received while testing.
 
 ## Coding-agent and contribution expectations
@@ -76,3 +80,13 @@ The work is expected to progress over several months. Do not claim camera or pla
 - Every fork maintains its own root `AGENTS.md`, based on the upstream instructions, with fork-specific purpose, behavior changes, affected modules, platforms, and required evidence/metrics.
 - Human pull requests use the minimum evidence template. AI coding agents provide enhanced evidence, including test counts and platform results; unavailable hardware checks are marked not run.
 - Review fork-specific changes separately from generally useful improvements. A maintainer decides which useful changes return upstream.
+
+## 2026-10-24 accepted responsive Controls Dock
+
+The r9 checkpoint replaces manual Single/Dual switching and the top Settings
+row. Available width selects one/two centered cards, capped at 320px each.
+Presets shrink uniformly 34–26px. Excess space is blank. The gear follows the
+rightmost visible card. Docked outer size is OBS-owned; floating outer size
+is capped to compact dual width and full control height, releasing caps on
+redocking. Yellow camera titles augment existing on-air selection cues.
+See TESTED_CHECKPOINTS.md for evidence and validation limits.

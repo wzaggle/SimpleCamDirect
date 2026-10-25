@@ -54,7 +54,7 @@ One model can expose multiple connection choices. Each named variant should decl
 
 Declare each operation independently and its numeric limits: pan/tilt movement and speed model, home, optical/digital zoom including absolute zoom and its native position range, focus near/far/auto/manual, preset recall/store/clear, power/standby, backlight, exposure compensation, iris/shutter/gain, white balance, position inquiry, and device discovery. Include:
 
-- Supported preset index range and any reserved slots, plus 0-based/1-based mapping.
+- Supported preset capacity and protocol index range. The UI/action layer presents preset numbers as 1-based; the protocol adapter converts those numbers to the profile/protocol's index representation (for standard VISCA, displayed preset 1 encodes protocol memory 0).
 - Pan and tilt speed minimum/maximum, curve (linear vs vendor curve), direction/stop encoding and whether values are shared or independent.
 - Zoom/focus range and encoding; optical vs digital range only if query semantics support it.
 - Per-operation required parameters, command variants, state prerequisites, and known unsupported states.

@@ -2,20 +2,20 @@
 
 ## Functional boundary
 
-SimpleCam Direct should own the scene action and the physical-camera command path. OBS remains the host for scenes, sources, preview/program state, and docks. A camera profile supplies validated model/firmware facts and operation bindings; a protocol driver encodes and interprets a protocol; a transport adapter moves bytes or standardized PTZ requests to the device.
+SimpleCamPTZ should own the scene action and the physical-camera command path. OBS remains the host for scenes, sources, preview/program state, and docks. A camera profile supplies validated model/firmware facts and operation bindings; a protocol driver encodes and interprets a protocol; a transport adapter moves bytes or standardized PTZ requests to the device.
 
 Implementation is staged. The first target is a Windows-only VISCA vertical slice for the AViPAS AV-1280W, before generalized profile authoring, ONVIF, NDI, or external beta expansion. See [`DEVELOPMENT_ROADMAP.md`](DEVELOPMENT_ROADMAP.md).
 
-The existing native SimpleCam OBS plugin is a proven reference for source behavior, but it writes request files for SimpleCamQt to consume. SimpleCam Direct removes that bridge entirely. Its OBS preset sources and camera dock call the same in-process camera action service; neither component sends requests to the other, and there is no source-to-dock or source-to-camera-I/O file protocol.
+The existing native SimpleCam OBS plugin is a proven reference for source behavior, but it writes request files for SimpleCamQt to consume. SimpleCamPTZ removes that bridge entirely. Its OBS preset sources and camera dock call the same in-process camera action service; neither component sends requests to the other, and there is no source-to-dock or source-to-camera-I/O file protocol.
 
 ## Logical components
 
 | Component | Responsibility | Owns |
 |---|---|---|
-| OBS integration | Register sources, docks, properties, hotkeys, lifecycle callbacks, scene/preview/program events | OBS API boundary and serialized source settings |
+| OBS integration | Register sources, docks, Tools windows, properties, hotkeys, lifecycle callbacks, scene/preview/program events | OBS API boundary and serialized source settings |
 | Preset source | Keep the existing OBS source-property workflow; store camera, logical preview number, trigger mode, and delay; request names from the currently selected group for editing; call the shared preview action service | Per-scene source configuration and source-name presentation |
 | Controls Dock | Operate configured camera slots: choose the camera shown on each card, move it, recall/store presets, and manage preset groups, names, and visual order; call the same action service as preset sources | Temporary control state, preset names/maps, and floating-appearance preference |
-| Camera Selection Tool | Assign a selected reusable profile to one of up to five installation slots; configure that physical camera's network or serial connection and test/retest the connection | Per-install slot assignment and connection details only |
+| Camera Selection Tool | Assign a selected reusable profile to one of up to five installation slots; configure that physical camera's network or serial connection, map its raw OBS video input for the live stack indicator, and test/retest the connection | Per-install slot assignment, connection details, and raw-feed source identity |
 | Profile catalog | Discover JSON and `.camera.cfg` profile files, validate schema and compatibility, de-duplicate ids, expose eligible profiles | Immutable profile records and validation diagnostics |
 | Camera Definition and Configuration Tool | Create, edit, duplicate, import, validate, test, save, and export reusable camera profiles, including protocol bindings and an optional ordered startup sequence | Profile drafts, validation results, and explicit test authorization |
 | Camera action service | Accept semantic actions (pan, stop, zoom, recall preset, store preset, etc.); preserve ordering and per-camera serialization | Queue, state, cancellation and acknowledgements |
@@ -59,6 +59,7 @@ This is a logical map, not a threading diagram. The implementation must keep pot
 8. **Diagnostic event:** timestamp, correlation id, camera/profile id, operation, layer, result, and redacted details.
 9. **Profile edit:** base profile id/version + draft changes + validation state. A draft is not active until it passes validation and the user applies it to an installation slot.
 10. **Startup sequence:** an optional ordered profile sequence runs when the selected camera's connection becomes ready and after reconnect. It uses validated driver operations, explicit state-setting commands, and the normal per-camera queue; results appear in the Camera Selection Tool's sent/reply diagnostics. A user can explicitly rerun it. It does not add controls to the Controls Dock.
+11. **Live camera stack indicator:** each camera slot may store the UUID of its raw OBS video input. The Controls Dock scans only the active Program scene, descending through visible nested scenes and groups in OBS stacking order, and marks the highest visible mapped raw feed. Missing/unconfigured feeds and scenes with no visible mapped camera remain unmarked. This is a layer-order cue, not pixel-coverage analysis.
 
 ## Target repository map
 
@@ -101,16 +102,18 @@ This layout is a starting map. Match the OBS plugin template's real build struct
 
 ## Current first-pass code map
 
-The initial implementation follows the OBS plugin template layout while keeping the camera path compact. The current Cameras dock is a first-sprint connection form; the planned Camera Selection Tool and Camera Definition and Configuration Tool are future OBS Tools windows:
+The initial implementation follows the OBS plugin template layout while keeping the camera path compact. The current Cameras Tool selects profiles and configures five camera slots; a broader connection workflow and the Camera Definition and Configuration Tool remain future OBS Tools windows:
 
 | Path | Current responsibility |
 |---|---|
-| `src/plugin-main.cpp` | OBS module lifecycle, dock registration, and Program/Preview scene-change dispatch |
+| `src/plugin-main.cpp` | OBS module lifecycle, Camera Control dock and Tools-menu registration, profile discovery paths, and Program/Preview scene-change dispatch |
 | `src/preset_source.cpp` | Distinct `simplecamdirect_preset` source, source properties/name refresh, and ordered scene-item dispatch |
-| `src/camera_docks.cpp` | Current Camera Control and interim Cameras Qt docks, preset-page editing, movement buttons, and initial connection form |
-| `src/camera_runtime.cpp` / `.hpp` | Persistent camera/preset settings, logical-to-physical mapping, asynchronous TCP queue, and semantic camera actions |
+| `src/camera_docks.cpp` | Camera Control dock, Tools-based Cameras profile/connection selector, preset-page editing, movement buttons, and per-card selection |
+| `src/camera_runtime.cpp` / `.hpp` | Persistent camera/profile/preset settings, profile-rendered VISCA actions, logical-to-physical mapping, asynchronous TCP queue, zoom inquiry updates, and per-profile capacity checks |
+| `src/camera_profile.cpp` / `.hpp` | Profile loading, structural checks, registered VISCA token rendering, profile capacity/transport accessors, and Save As profile copies |
+| `src/profile_test_tool.cpp` / `.hpp` | Standalone Tools-menu VISCA profile tester, per-command and Test All raw TCP send/reply results, and bounded zoom discovery |
 | `src/visca_packets.hpp` | Initial AViPAS-target VISCA packet builders |
-| `tests/visca_packets_test.cpp` | Byte-for-byte packet fixtures runnable without OBS |
+| `tests/visca_packets_test.cpp`, `tests/camera_profile_test.cpp` | Byte-for-byte action and profile-template fixtures |
 
 This is the 0.1.0 Windows vertical slice, not yet the future multi-profile architecture described above. Windows compilation, OBS runtime behavior, and real-camera behavior still require the maintainer's test machine and AViPAS camera.
 
@@ -121,7 +124,7 @@ This is the 0.1.0 Windows vertical slice, not yet the future multi-profile archi
 - User connection data belongs to the user's OBS configuration, not the shared camera catalog or reusable model profile.
 - Shipped manufacturer profiles are read-only in the editor. Customizations are saved as user profiles; Save As always creates a new stable profile id and never silently replaces the source profile.
 - There is one reusable profile format for built-in, manufacturer-submitted, and user-created profiles. A custom variant is a distinct profile with its own id (for example, AViPAS 1280X), not a per-unit capability override. Each physical camera slot stores its selected profile id and private connection settings separately.
-- The profile format may contain an optional ordered startup sequence for supported model-specific setup that is outside SimpleCam Direct's regular action controls. Startup commands are declarative and driver-validated, run on connection readiness/reconnect, and set explicit states rather than toggle. They use the same serialized camera action/transport path and expose sent/reply results.
+- The profile format may contain an optional ordered startup sequence for supported model-specific setup that is outside SimpleCamPTZ's regular action controls. Startup commands are declarative and driver-validated, run on connection readiness/reconnect, and set explicit states rather than toggle. They use the same serialized camera action/transport path and expose sent/reply results.
 - The profile editor may assemble only declared, typed operations and supported driver parameters. It must not become a general script editor or allow arbitrary code, shell execution, or user-supplied network destinations.
 - Named preset source behavior should not be coupled to camera card layout, so a dock can be changed without breaking saved scenes.
 - Device discovery and source-name refresh are independent from camera motion; failure to refresh labels must not accidentally trigger a move.

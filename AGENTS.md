@@ -2,7 +2,7 @@
 
 ## Project intent
 
-This repository is **SimpleCam Direct**, a new, independent OBS PTZ-control plugin inspired by proven SimpleCam behavior. It is not the separate SimpleCamQt desktop controller and should not depend on that application, its Windows registry settings, or its temporary-file request protocol. The intended direction is direct in-process control from OBS source events and dock controls to a camera transport service.
+This repository builds **SimpleCamPTZ**, an independent OBS PTZ-control plugin inspired by proven SimpleCam behavior. It is not the separate SimpleCamQt desktop controller and should not depend on that application, its Windows registry settings, or its temporary-file request protocol. The intended direction is direct in-process control from OBS source events and dock controls to a camera transport service. The private GitHub repository retains its original `SimpleCamDirect` name for now.
 
 The plugin is human-maintained and may be developed with ChatGPT, Codex, or other coding agents. Treat these instructions and the linked design documents as project context. Read them before proposing or changing architecture.
 
@@ -25,7 +25,8 @@ Also inspect the current source, build files, tests, and git history before edit
 - Keep the SimpleCamQt-style live controls and preset management in the **Controls Dock**: camera selection for the visible cards, movement, preset recall/store, preset groups, naming, and visual swapping. Keep per-installation slot assignment and connection details in the **Camera Selection Tool**. Keep reusable model capabilities, protocol-specific behavior, and profile JSON editing in the **Camera Definition and Configuration Tool**. The current Cameras dock is an interim surface for the first vertical slice; it is not the target location for the full profile editor. A scene preset source stores its camera and logical preview number (1–14), not its own group. It reads the active group's names for source editing; the shared preview action applies the active group mapping when it calls the camera.
 - Preset pages contain 14 button slots each. Start with five pages. The existing top `PG` button cycles through pages; do not add selector radio buttons. In Settings, put `+` and trash controls beside the active page-description field to add a page or remove one. Removal is allowed only when every button label on that page is blank and at least five pages will remain. Put `Clear` beside `Swap` in Settings; Clear blanks the selected button's label and never erases a preset from the camera. In Control mode, provide Set and Rename only. Resolve a 1-based preview number through the configured camera's page map. The default sequential map is `Preview + ((Preview Group - 1) * 14)`, but user layouts may distribute physical presets across pages. Respect camera capacity and show unavailable slots as disabled `---` buttons.
 - Scene sources and dock controls must call the same in-process camera action service and per-camera queue. Do not add file-based or other IPC between these plugin components, or depend on a separate SimpleCamQt process.
-- Do not reserve a network camera exclusively for SimpleCam Direct. SimpleCamQt and the camera web interface remain independent clients. Preserve Direct source dispatch order and never coalesce repeated scene preset requests; do not claim global ordering across separate clients.
+- Do not reserve a network camera exclusively for SimpleCamPTZ. SimpleCamQt and the camera web interface remain independent clients. Preserve Direct source dispatch order and never coalesce repeated scene preset requests; do not claim global ordering across separate clients.
+- Preserve the OBS preset source type id `simplecamdirect_preset` during the product rename so existing scenes continue to resolve. The installer replaces the old SimpleCam Direct module to avoid duplicate registration of this id.
 - Separate UI, high-level camera actions, profile/catalog loading, protocol drivers, and transport I/O.
 - Camera profiles are data. A JSON profile must never execute shell commands, scripts, arbitrary dynamic code, or unvalidated URLs. An optional ordered startup sequence may use only validated, driver-supported command operations and typed parameters. It runs after connection readiness and on reconnect; its steps must set explicit states rather than toggle them. A model exception becomes a separate profile (for example, AViPAS 1280X), not a per-camera capability override.
 - Network transport, serial transport, VISCA, ONVIF, and NDI PTZ are distinct concerns. Do not assume that VISCA-over-TCP, VISCA-over-UDP, a VISCA-over-IP packet envelope, ONVIF, or NDI control are interchangeable.
@@ -77,3 +78,23 @@ Every fork must maintain its own fork-local agent context in its root `AGENTS.md
 The fork-local instructions guide work in the fork; they are not automatically changes proposed for upstream. A pull request must include the fork-local context (or a link to the exact fork commit/file) and the evidence block in `docs/PULL_REQUEST_EVIDENCE_TEMPLATE.md`. Add fork-specific material to upstream `AGENTS.md` only when it is generalizable and the maintainer accepts it.
 
 Human-led submissions may use the minimum evidence level. A PR missing a required entry is incomplete; use `N/A` with a reason when a metric does not apply. AI coding agents must follow the enhanced evidence level in `docs/FORK_AND_AGENT_CONTRIBUTIONS.md`; they must report test counts and platform results accurately, mark unavailable hardware tests as not run, and never infer success from a build or a profile parse.
+
+## Current responsive dock checkpoint (2026-10-24, r9)
+
+Read docs/TESTED_CHECKPOINTS.md before UI changes. Its current responsive
+contract supersedes older fixed-size/Single-Dual toolbar descriptions. OBS
+owns docked geometry; never reintroduce global separator styles or manual
+resizeDocks calls to implement card selection. Content width selects one/two
+cards, each capped at 320px; presets compress from 34 to 26px; the black gear
+follows the rightmost visible card. Outer maximums apply ONLY while floating
+and are released synchronously on redocking. Preserve the accepted OFF row.
+Yellow camera titles indicate the existing on-air match, not guaranteed
+compositing coverage. No match means normal green. Preserve source IDs.
+
+The maintainer requires CODE IT before implementing a newly discussed change.
+MARK IT authorizes saving the accepted source to GitHub with substantive
+comments. Package overlays under unique ZIP names, with relative src paths.
+For the current Denver Windows workflow, ZIP entries need America/Denver
+local timestamps; ZIP timestamps have no time-zone metadata. Older timestamps
+can silently skip MSBuild recompilation. Do not treat Install success alone
+as evidence that changed camera_docks.cpp compiled or that OBS loaded it.

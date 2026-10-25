@@ -1,6 +1,6 @@
 # User guide plan
 
-The product name is **SimpleCam Direct**. Use this name consistently in future user-facing documentation, while distinguishing it from the existing SimpleCamQt desktop app and file-bridge plugin. The OBS dock for live control and preset management is called **Camera Control**; camera profiles and communication setup belong in a separate dock called **Cameras** (working label).
+The product name is **SimpleCamPTZ**. Use this name consistently in future user-facing documentation, while distinguishing it from the existing SimpleCamQt desktop app and file-bridge plugin. The OBS dock for live control and preset management is called **Camera Control**; camera profiles and communication setup belong in a separate dock called **Cameras** (working label).
 
 The full user guide should be written against the implemented UI, not guessed in advance. The outline below defines the required coverage and gives coding agents a stable target for later user-facing documentation.
 
@@ -18,7 +18,7 @@ The full user guide should be written against the implemented UI, not guessed in
 10. **Edit and debug a camera profile** — open a profile read-only, make a draft, edit supported command parameters/steps, validate and simulate, safely test on a selected camera, inspect the live Sent/Received transaction trace and protocol responses, and Save As a new reusable profile.
 11. **Technical appendix: create a camera profile** — schema version, identity/firmware, VISCA transport variants, semantic action bindings, capabilities/limits including manual and preset transition speed, sources/evidence, tests, validation command, package layout, and contribution PR checklist.
 12. **Troubleshooting** — use the layered checklist in `PLATFORM_TEST_CHECKLIST.md`; explain how to capture a redacted diagnostic bundle and what to include in an issue.
-13. **Privacy and safety** — local camera commands, credential handling, no profile code execution, warnings for preset overwrite/clear/power/reset, and limitations.
+13. **Privacy and safety** — local camera commands, credential handling, no profile code execution, immediate preset overwrite behavior in Camera Control, and safeguards for clear/power/reset operations.
 14. **Glossary and support** — VISCA dialect/framing, ONVIF, NDI PTZ, RS-232/422/485, profile status, issue/PR routes.
 
 ## Writing rules for the finished guide

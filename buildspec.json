@@ -27,11 +27,11 @@
   },
   "platformConfig": {
     "macos": {
-      "bundleId": "com.wzaggle.simplecamdirect"
+      "bundleId": "com.wzaggle.simplecamptz"
     }
   },
-  "name": "simplecamdirect",
-  "displayName": "SimpleCam Direct",
+  "name": "simplecamptz",
+  "displayName": "SimpleCamPTZ",
   "version": "0.1.0",
   "author": "William Zaggle",
   "website": "https://github.com/wzaggle/SimpleCamDirect",
