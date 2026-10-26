@@ -135,3 +135,10 @@ currently read macos from ci/push-platform.txt for the scoped Mac investigation.
 The Mac PKG is now restricted to the user's home domain and CI verifies an
 actual installation at the path OBS scans. The earlier all-users description
 above is superseded. See MAC_DOCK_R17.md for test procedure and current status.
+
+## r18 shared-runtime validation
+
+ci/push-platform.txt is restored to all for the shared startup-zoom change.
+Run 40402713949 passed all three platforms, their tests, installers and combined
+revision check. The earlier r17 Mac-only automatic selection is superseded for
+this shared change; manual platform choices still work. See STARTUP_ZOOM_R18.md.

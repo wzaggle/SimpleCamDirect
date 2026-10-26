@@ -111,3 +111,11 @@ Mac title bar; the optional Qt title bar was not enabled. The OBS main window
 is slightly too tall for the screen. Native-title-bar versus floating-constraint
 causation is not isolated; retain r17 behavior for now and investigate height
 separately. r18 adds only the requested startup zoom initialization.
+
+## 2026-10-26 — r18 startup zoom native validation
+
+Run 40402713949 for 1f6374e9f887dba8fd3ae5bff8ff5d9a555023cc passed
+Windows/Mac/Linux compile, four suites on each, all installers and same-revision
+collection. Mac user-domain install verification also passed. Local concurrency
+regression reports 34 checks, zero failures, including the startup query cases.
+Real camera startup slider acceptance remains pending. See STARTUP_ZOOM_R18.md.

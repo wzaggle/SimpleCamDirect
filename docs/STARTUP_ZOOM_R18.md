@@ -50,3 +50,18 @@ window geometry remain unchanged.
 5. Change a connection/profile and verify its new reply supplies the position.
 6. With a camera offline, confirm OBS remains responsive and other cameras
    continue operating. Check ZoomInit in the log for that failure.
+
+## Native cloud build result
+
+Run [40402713949](https://github.com/wzaggle/SimpleCamDirect/actions/runs/40402713949)
+succeeded for 1f6374e9f887dba8fd3ae5bff8ff5d9a555023cc. Windows x64,
+Apple Silicon macOS and Ubuntu 24.04 x64 each compiled and passed all four
+automated suites. Windows EXE, Mac user-domain PKG and Linux DEB were created;
+Mac installation into the current user's OBS directory was verified again.
+The collector checked all packages use the same revision and passed tests.
+
+[All-platform installers](https://github.com/wzaggle/SimpleCamDirect/actions/runs/40402713949/artifacts/12689656780)
+[Mac-only package](https://github.com/wzaggle/SimpleCamDirect/actions/runs/40402713949/artifacts/12688424286)
+
+Artifacts expire 2026-11-02. Real-camera startup/refresh acceptance remains
+pending. Native builds and simulated replies do not establish hardware behavior.
