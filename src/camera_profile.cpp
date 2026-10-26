@@ -140,7 +140,7 @@ bool CameraProfileDocument::parseRoot(const QJsonObject &root, QString *error)
 		return false;
 	}
 	QSet<QString> connectionIds;
-	for (const QJsonValue &value : connections) {
+	for (const QJsonValue value : connections) {
 		if (!value.isObject()) {
 			setError(error, QStringLiteral("Each connection variant must be an object"));
 			return false;
@@ -193,7 +193,7 @@ bool CameraProfileDocument::parseRoot(const QJsonObject &root, QString *error)
 				setError(error, QStringLiteral("Command '%1' has an empty sequence").arg(it.key()));
 				return false;
 			}
-			for (const QJsonValue &step : sequence) {
+			for (const QJsonValue step : sequence) {
 				if (!step.isString() || step.toString().trimmed().isEmpty()) {
 					setError(error, QStringLiteral("Command '%1' sequence steps must be non-empty strings").arg(it.key()));
 					return false;
