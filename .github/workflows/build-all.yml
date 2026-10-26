@@ -1,15 +1,26 @@
 name: Build All Platforms
-run-name: SimpleCamPTZ packages ${{ inputs.source_revision || github.sha }}
+run-name: SimpleCamPTZ ${{ inputs.platform || 'macos' }} packages ${{ inputs.source_revision || github.sha }}
 
 on:
   workflow_dispatch:
     inputs:
+      platform:
+        description: 'Platform to build (macos = Apple Silicon)'
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - macos
+          - windows
+          - linux
       source_revision:
         description: 'Source revision to package (blank = selected branch HEAD)'
         required: false
         type: string
   # Validate build-infrastructure changes. Ordinary source edits do not trigger
-  # three paid runners; use Run workflow when you want a complete package set.
+  # paid runners; ci/push-platform.txt scopes infrastructure validation.
+  # Use Run workflow -> all for a complete release package set.
   push:
     paths:
       - '.github/workflows/build-all.yml'
@@ -19,7 +30,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: simplecam-packages-${{ inputs.source_revision || github.ref }}
+  group: simplecam-packages-${{ inputs.platform || 'macos' }}-${{ inputs.source_revision || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -29,11 +40,18 @@ jobs:
     outputs:
       revision: ${{ steps.meta.outputs.revision }}
       package: ${{ steps.meta.outputs.package }}
+      platform: ${{ steps.select.outputs.platform }}
+      matrix: ${{ steps.select.outputs.matrix }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ inputs.source_revision || github.sha }}
           persist-credentials: false
+      - name: Select native platforms
+        id: select
+        env:
+          SELECTED_PLATFORM: ${{ inputs.platform }}
+        run: python3 ci/select_platforms.py --event "$GITHUB_EVENT_NAME" --platform "$SELECTED_PLATFORM"
       - name: Record exact source revision
         id: meta
         shell: bash
@@ -53,14 +71,7 @@ jobs:
     needs: prepare
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - platform: windows
-            runner: windows-2022
-          - platform: macos
-            runner: macos-26
-          - platform: linux
-            runner: ubuntu-24.04
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     env:
@@ -129,6 +140,7 @@ jobs:
   collect:
     name: Collect Windows, macOS, Linux installers
     needs: [prepare, native]
+    if: needs.prepare.outputs.platform == 'all'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

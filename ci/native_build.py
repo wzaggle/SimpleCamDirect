@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import plistlib
 import shutil
 import subprocess
 import tarfile
@@ -150,15 +151,51 @@ def package(kind, build, output):
         pkgroot = ROOT / 'package-macos/Library/Application Support/obs-studio/plugins'
         pkgroot.mkdir(parents=True, exist_ok=True)
         shutil.copytree(bundle, pkgroot / bundle.name, symlinks=True, dirs_exist_ok=True)
-        run('pkgbuild', '--identifier', 'com.wzaggle.simplecamptz', '--version', SPEC['version'],
+        # A home-directory-only product package. A plain component PKG would
+        # default to the system Library, which Apple Silicon OBS does not scan.
+        components = ROOT / 'package-macos-components.plist'
+        run('pkgbuild', '--analyze', '--root', ROOT / 'package-macos', components)
+        metadata = plistlib.loads(components.read_bytes())
+        for component in metadata:
+            component['BundleIsRelocatable'] = False
+        components.write_bytes(plistlib.dumps(metadata))
+        component_pkg = ROOT / 'SimpleCamPTZ-user-component.pkg'
+        run('pkgbuild', '--identifier', 'com.wzaggle.simplecamptz.user', '--version', SPEC['version'],
             '--root', ROOT / 'package-macos', '--install-location', '/',
-            output / f"SimpleCamPTZ-Setup-{SPEC['version']}-macOS-arm64.pkg")
-        instructions = ('Apple Silicon only; macOS 13+. Close OBS and run the PKG (all users).\n'
-                        'Alternative: extract the tar.gz and copy simplecamptz.plugin into\n'
-                        '~/Library/Application Support/obs-studio/plugins/ for this user.\n'
+            '--component-plist', components, component_pkg)
+        distribution = ROOT / 'package-macos-distribution.xml'
+        distribution.write_text(f'''<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="2">
+  <title>SimpleCamPTZ {SPEC['version']}</title>
+  <options customize="never" require-scripts="false"/>
+  <domains enable_anywhere="false" enable_currentUserHome="true" enable_localSystem="false"/>
+  <choices-outline><line choice="simplecamptz"/></choices-outline>
+  <choice id="simplecamptz" title="SimpleCamPTZ for this user" visible="false">
+    <pkg-ref id="com.wzaggle.simplecamptz.user"/>
+  </choice>
+  <pkg-ref id="com.wzaggle.simplecamptz.user" version="{SPEC['version']}" auth="none">SimpleCamPTZ-user-component.pkg</pkg-ref>
+</installer-gui-script>
+''', encoding='utf-8')
+        setup = output / f"SimpleCamPTZ-Setup-{SPEC['version']}-macOS-arm64.pkg"
+        run('productbuild', '--distribution', distribution, '--package-path', ROOT, setup)
+        # Exercise the actual per-user installer, not just its archive layout.
+        run('installer', '-pkg', setup, '-target', 'CurrentUserHomeDirectory')
+        installed = Path.home() / 'Library/Application Support/obs-studio/plugins/simplecamptz.plugin'
+        if not (installed / 'Contents/MacOS/simplecamptz').is_file():
+            raise RuntimeError('Per-user installer did not place the plugin in the OBS search directory')
+        if hashlib.sha256((installed / 'Contents/MacOS/simplecamptz').read_bytes()).digest() != hashlib.sha256((bundle / 'Contents/MacOS/simplecamptz').read_bytes()).digest():
+            raise RuntimeError('Installed plugin differs from the signed staged plugin')
+        run('codesign', '--verify', '--deep', '--strict', installed)
+        print('Per-user install verified:', installed, flush=True)
+        instructions = ('Apple Silicon only; macOS 13+. Close OBS and run the PKG for the current user.\n'
+                        'Installs to ~/Library/Application Support/obs-studio/plugins/.\n'
+                        'Do not install into the system /Library folder: Apple Silicon OBS does not scan it.\n'
+                        'Alternative: extract the tar.gz and copy simplecamptz.plugin into the user folder.\n'
                         'Test packages are ad-hoc signed, not Apple Developer ID signed or notarized.\n'
                         'If macOS blocks the installer, use its normal Privacy & Security/Open Anyway approval.\n'
-                        'Do not disable Gatekeeper globally. OBS load and camera behavior still require M1 testing.\n')
+                        'Do not disable Gatekeeper globally. Camera behavior still requires M1 testing.\n'
+                        'r17: the dock starts inside OBS once; later launches retain the saved layout.\n'
+                        'Tools > SimpleCamPTZ Mac Dock Diagnostics provides controlled docking tests.\n')
     else:
         root = ROOT / 'package-linux'
         run('cmake', '--install', build, '--config', CONFIG, '--prefix', root / 'usr')

@@ -24,3 +24,12 @@
 - Put the input filename first, preserving the arm64 validation itself.
 - Rebuild all platforms for the same new source revision. M1 OBS-load and
   real-camera validation remain separate from build/test/package success.
+
+## 2026-10-26 — r17 Mac docking/installer investigation
+
+- Add isolated macOS dock diagnostics and optional Qt title bar, preserving
+  Windows code paths and the accepted camera/preset behavior.
+- Correct the Mac installer to a nonrelocatable current-user product package.
+  Verify real user-domain installation and signed binary identity in CI.
+- Add native platform choice; scope this infrastructure validation push to Mac.
+- No Intel build or permanent Mac docking success is claimed at this checkpoint.

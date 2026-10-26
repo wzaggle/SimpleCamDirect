@@ -2,6 +2,9 @@
 #include "camera_runtime.hpp"
 #include "preset_source.hpp"
 #include "profile_test_tool.hpp"
+#ifdef Q_OS_MACOS
+#include "mac_dock_support.hpp"
+#endif
 
 #include <obs-frontend-api.h>
 #include <obs-module.h>
@@ -108,6 +111,9 @@ void onFrontendEvent(enum obs_frontend_event event, void *)
 		if (scene)
 			obs_source_release(scene);
 	} else if (event == OBS_FRONTEND_EVENT_FINISHED_LOADING) {
+#ifdef Q_OS_MACOS
+		simplecam::finishMacDockStartup();
+#endif
 		obs_source_t *program = obs_frontend_get_current_scene();
 		obs_source_t *preview = obs_frontend_get_current_preview_scene();
 		if (preview && preview != program) {
@@ -184,6 +190,9 @@ bool obs_module_load(void)
 			simplecam::setCameraRuntime(index, nullptr);
 		return false;
 	}
+#ifdef Q_OS_MACOS
+	simplecam::installMacDockSupport(cameraControlDock, settingsPath);
+#endif
 	// Isolation test: OBS owns its native dock separators. Do not install a
 	// main-window stylesheet override, proxy style, or custom resize grip.
 	obs_log(LOG_INFO, "[SimpleCamPTZ DockIsolation] build=native-separators-r1 override=OFF customGrip=OFF");
@@ -202,6 +211,9 @@ bool obs_module_load(void)
 void obs_module_unload(void)
 {
 	simplecam::shutdownPresetSourceUi();
+#ifdef Q_OS_MACOS
+	simplecam::shutdownMacDockSupport();
+#endif
 	obs_frontend_remove_event_callback(onFrontendEvent, nullptr);
 	// The timer is parented to the control dock. OBS may already have destroyed
 	// that dock during shutdown, so let QObject ownership destroy the timer and

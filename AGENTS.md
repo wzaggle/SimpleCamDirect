@@ -137,3 +137,17 @@ now allow a Clear All and Delete / Cancel confirmation; clear names across
 all cameras before calling the existing blank-only deletion guard. Cancel
 must leave names and group count unchanged. Preserve five groups minimum.
 See docs/GROUP_CLEAR_R16.md for validation and operator checks.
+
+## macOS diagnostic boundary (2026-10-26, r17)
+
+Read docs/MAC_DOCK_R17.md before Mac dock or package work. The maintainer
+authorized a Mac-only dock experiment: one-time initial dock after OBS restores
+layout, released floating maxima, passive diagnostics and optional Qt title bar.
+Respect Lock Docks and saved layouts after that first placement. No Windows
+window/size policy changes, global style overrides or native-handle creation.
+The native-title-bar and size-limit causes remain unconfirmed until M1 tests.
+The Mac package must target CurrentUserHomeDirectory, disable bundle relocation
+and be installed/verified by CI before delivery. Preserve production INIs.
+Manual Actions platform selection includes all/macos/windows/linux. Automatic
+CI infrastructure pushes currently use ci/push-platform.txt (macos); restore all
+for shared infrastructure work. Intel support remains a separate upcoming gate.

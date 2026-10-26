@@ -33,3 +33,10 @@ OBS creates the dock frame and title bar when the plugin registers its content t
 Test the dock in both docked and floating states, using every supported OBS theme family available on the target platforms. Verify that docked content always matches OBS and never shows Classic overrides; floating Follow OBS updates with theme changes; floating SimpleCam Classic retains its accents; and redocking immediately restores OBS styling. Neither choice may change layout geometry or control behavior. Test selected/unselected, hover/focus, disabled, error, group, and flash-confirmation states for readable contrast.
 
 The OBS frontend exposes a theme-changed event (available since OBS 29); subscribe through the supported frontend API rather than polling. Keep any version-specific fallback explicit if the minimum OBS version changes.
+
+## r17 Mac-only diagnostic exception
+
+The optional Qt title-bar test in MAC_DOCK_R17.md uses the OBS-owned wrapper
+and inherits the host style, with no custom colors. It bypasses native window
+decorations only when the operator selects that diagnostic toggle. This does
+not change Windows title bars or introduce a separate application window.

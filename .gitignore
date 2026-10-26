@@ -37,3 +37,8 @@ Thumbs.db
 /installers/
 __pycache__/
 *.pyc
+
+# Generated macOS user installer intermediates
+/package-macos-components.plist
+/package-macos-distribution.xml
+/SimpleCamPTZ-user-component.pkg

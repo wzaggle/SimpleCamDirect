@@ -192,3 +192,14 @@ operator checklist. Windows compile/OBS/camera results remain pending.
 - [ ] Slider follows post-completion zoom and camera reassignment without feedback moves.
 - [ ] Ctrl+Clear cancel/accept scope, retained physical maps, global page deletion guard.
 - [ ] Recovered camera-specific names persist unchanged except deliberate edits.
+
+## r17 macOS diagnostic gate
+
+- [ ] Per-user PKG installs into the current user's OBS plugin directory.
+- [ ] M1 initial placement, undock/redock, native/Qt title-bar comparison.
+- [ ] Floating-limit toggle isolates whether bounds affect drag eligibility.
+- [ ] Lock Docks remains respected; subsequent startup restores saved layout.
+- [ ] Clean OBS shutdown/relaunch with diagnostics and optional Qt title bar.
+- [ ] Camera/source behavior retains r16 results.
+
+See MAC_DOCK_R17.md. Intel OBS-load/hardware checks remain separate.

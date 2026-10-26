@@ -85,3 +85,10 @@ GitHub Actions workflow packages one exact commit into Windows/macOS/Linux
 folders after native builds and automated tests. It does not deploy production
 or publish a release. Local Windows Install is unchanged. Mac and Linux need
 separate OBS/runtime acceptance tests; CI is not a hardware support claim.
+
+## Apple Silicon diagnostic build (r17)
+
+The first M1 package loaded after a manual user-directory copy but did not
+redock. The next diagnostic corrects the package destination and tests docking
+without changing the accepted Windows behavior. See [MAC_DOCK_R17](docs/MAC_DOCK_R17.md).
+Actions now offers a platform choice for Mac-only builds. Intel testing is planned.

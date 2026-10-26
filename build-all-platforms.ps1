@@ -1,5 +1,9 @@
-param([switch]$InstallWindows)
+param(
+    [ValidateSet("all", "windows", "macos", "linux")][string]$Platform = "all",
+    [switch]$InstallWindows
+)
 $ErrorActionPreference = "Stop"
+if ($InstallWindows -and $Platform -notin @("all", "windows")) { throw "InstallWindows requires Platform all or windows." }
 Set-Location $PSScriptRoot
 $repository = "wzaggle/SimpleCamDirect"
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) { throw "Install Git for Windows first." }
@@ -16,7 +20,7 @@ if ($LASTEXITCODE -ne 0) { throw "This source revision is not on GitHub yet. Pus
 $existing = & gh run list --repo $repository --workflow build-all.yml --limit 20 --json databaseId
 if ($LASTEXITCODE -ne 0) { throw "Cannot read workflow runs." }
 $oldIds = @((ConvertFrom-Json ($existing -join "`n")) | ForEach-Object { $_.databaseId })
-& gh workflow run build-all.yml --repo $repository --ref main -f "source_revision=$revision"
+& gh workflow run build-all.yml --repo $repository --ref main -f "source_revision=$revision" -f "platform=$Platform"
 if ($LASTEXITCODE -ne 0) { throw "Could not start Build All Platforms." }
 $runId = $null
 for ($attempt = 0; $attempt -lt 20; $attempt++) {
@@ -30,7 +34,7 @@ if (-not $runId) { throw "Workflow started but no run ID appeared. Check the Git
 & gh run watch $runId --repo $repository --exit-status
 if ($LASTEXITCODE -ne 0) { throw "One or more platform builds failed. Review Actions logs; successful platforms retain their individual artifacts." }
 $spec = Get-Content (Join-Path $PSScriptRoot "buildspec.json") -Raw | ConvertFrom-Json
-$artifact = "SimpleCamPTZ-$($spec.version)-$($revision.Substring(0,9))-AllPlatforms"
+$artifact = if ($Platform -eq "all") { "SimpleCamPTZ-$($spec.version)-$($revision.Substring(0,9))-AllPlatforms" } else { "packages-$Platform" }
 $destination = Join-Path $PSScriptRoot "installers\$artifact-run$runId"
 & gh run download $runId --repo $repository --name $artifact --dir $destination
 if ($LASTEXITCODE -ne 0) { throw "Builds succeeded but package download failed." }

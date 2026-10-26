@@ -125,3 +125,13 @@ local retention. The macOS folder contains
 The M1 OBS-load, modifier behavior and real-camera checks remain manual and
 unverified. The package is ad-hoc signed for testing, not notarized. These build
 results do not establish Mac/Linux runtime or camera compatibility.
+
+## r17 platform selection and Mac installation
+
+Run workflow now accepts platform all/macos/windows/linux; macos means Apple
+Silicon. Single-platform jobs upload packages-<platform> and skip the combined
+collector. The PowerShell helper accepts -Platform macos. Automatic CI pushes
+currently read macos from ci/push-platform.txt for the scoped Mac investigation.
+The Mac PKG is now restricted to the user's home domain and CI verifies an
+actual installation at the path OBS scans. The earlier all-users description
+above is superseded. See MAC_DOCK_R17.md for test procedure and current status.

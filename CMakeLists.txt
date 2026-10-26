@@ -25,6 +25,10 @@ add_library(simplecamptz MODULE
   resources/simplecamdirect.qrc
 )
 
+if(APPLE)
+  target_sources(simplecamptz PRIVATE src/mac_dock_support.cpp)
+endif()
+
 find_package(libobs REQUIRED)
 find_package(obs-frontend-api REQUIRED)
 find_package(Qt6 REQUIRED COMPONENTS Core Widgets Network)

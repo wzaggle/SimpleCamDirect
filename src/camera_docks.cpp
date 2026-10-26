@@ -2424,6 +2424,12 @@ void CameraControlDock::updateFloatingLimits()
 {
 	if (!floatingDock_ || !layout())
 		return;
+#ifdef Q_OS_MACOS
+	if (floatingDock_->property("simplecamptz.macRelaxFloatingLimits").toBool()) {
+		floatingDock_->setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
+		return;
+	}
+#endif
 	const int rowHeight = camera1Card_->presetRowHeight_;
 	const int fullContentHeight = layout()->minimumSize().height() + 7 * (34 - rowHeight);
 	if (!settingsMode_)
