@@ -103,6 +103,26 @@ def test_environment(kind):
     return env
 
 
+def stage_macos_test_libraries(build):
+    # Standalone test executables have the same @executable_path/../Frameworks
+    # lookup as an OBS app. Populate that test-only directory with symlinks to
+    # the verified SDK libraries. Never copy it into the plugin package.
+    frameworks = build / 'Frameworks'
+    frameworks.mkdir(exist_ok=True)
+    sdk = ROOT / '.ci-sdk'
+    for prefix in (sdk / 'install/Frameworks', sdk / 'qt6', sdk / 'prebuilt'):
+        for library in sorted(prefix.rglob('*.framework')):
+            dest = frameworks / library.name
+            if library.is_dir() and not dest.exists():
+                dest.symlink_to(library, target_is_directory=True)
+        for library in sorted(prefix.rglob('*.dylib')):
+            if any(parent.suffix == '.framework' for parent in library.parents):
+                continue
+            dest = frameworks / library.name
+            if library.is_file() and not dest.exists():
+                dest.symlink_to(library)
+
+
 def package(kind, build, output):
     output.mkdir(parents=True, exist_ok=True)
     if kind == 'windows':
@@ -122,6 +142,7 @@ def package(kind, build, output):
         run('codesign', '--force', '--deep', '--sign', '-', bundle)
         run('codesign', '--verify', '--deep', '--strict', bundle)
         run('lipo', '-verify_arch', 'arm64', bundle / 'Contents/MacOS/simplecamptz')
+        run('otool', '-L', bundle / 'Contents/MacOS/simplecamptz')
         # A .tar.gz keeps bundle symlinks and permissions intact through the
         # final all-platform artifact ZIP.
         with tarfile.open(output / f"SimpleCamPTZ-{SPEC['version']}-macOS-arm64.tar.gz", 'w:gz') as archive:
@@ -174,6 +195,8 @@ def main():
     targets = ['simplecamptz', 'simplecamptz_packet_tests', 'simplecamptz_profile_tests',
                'simplecamptz_runtime_state_tests', 'simplecamptz_camera_concurrency_tests']
     run('cmake', '--build', build, '--config', CONFIG, '--target', *targets, '--parallel', PARALLEL)
+    if kind == 'macos':
+        stage_macos_test_libraries(build)
     run('ctest', '--test-dir', build, '-C', CONFIG, '--output-on-failure', env=test_environment(kind))
     folder = {'windows': 'Windows', 'macos': 'macOS', 'linux': 'Linux'}[kind]
     output = ROOT / 'packages' / folder
