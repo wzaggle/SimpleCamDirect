@@ -3,7 +3,7 @@
 ## Current setup
 
 GitHub Actions workflow **Build All Platforms** compiles the same exact commit
-on Windows 2022 x64, Apple Silicon macOS 15, and Ubuntu 24.04 x64. It runs the
+on Windows 2022 x64, Apple Silicon macOS 26 (Xcode 26.5), and Ubuntu 24.04 x64. It runs the
 packet, profile, runtime-state, and localhost camera-concurrency tests before
 packaging each platform. No physical cameras or production settings are used.
 

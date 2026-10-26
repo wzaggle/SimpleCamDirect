@@ -6,6 +6,7 @@ add_executable(simplecamptz_runtime_state_tests EXCLUDE_FROM_ALL
 )
 target_include_directories(simplecamptz_runtime_state_tests PRIVATE src)
 target_compile_features(simplecamptz_runtime_state_tests PRIVATE cxx_std_17)
+target_compile_definitions(simplecamptz_runtime_state_tests PRIVATE QT_NO_KEYWORDS)
 target_link_libraries(simplecamptz_runtime_state_tests PRIVATE
   Qt6::Core Qt6::Network OBS::libobs plugin-support)
 add_test(NAME simplecamptz_runtime_state_tests
@@ -19,6 +20,7 @@ add_executable(simplecamptz_camera_concurrency_tests EXCLUDE_FROM_ALL
 )
 target_include_directories(simplecamptz_camera_concurrency_tests PRIVATE src)
 target_compile_features(simplecamptz_camera_concurrency_tests PRIVATE cxx_std_17)
+target_compile_definitions(simplecamptz_camera_concurrency_tests PRIVATE QT_NO_KEYWORDS)
 target_link_libraries(simplecamptz_camera_concurrency_tests PRIVATE
   Qt6::Core Qt6::Network OBS::libobs plugin-support)
 add_test(NAME simplecamptz_camera_concurrency_tests

@@ -58,7 +58,7 @@ jobs:
           - platform: windows
             runner: windows-2022
           - platform: macos
-            runner: macos-15
+            runner: macos-26
           - platform: linux
             runner: ubuntu-24.04
     runs-on: ${{ matrix.runner }}
@@ -76,6 +76,9 @@ jobs:
           python-version: '3.12'
       - name: Install build tools
         run: python -m pip install cmake==3.31.10 ninja==1.11.1.4
+      - name: Select the OBS-required macOS SDK
+        if: runner.os == 'macOS'
+        run: sudo xcode-select --switch /Applications/Xcode_26.5.app/Contents/Developer
       - name: Install Ubuntu SDK dependencies
         if: runner.os == 'Linux'
         run: |
