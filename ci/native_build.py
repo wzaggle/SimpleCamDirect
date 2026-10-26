@@ -92,12 +92,10 @@ def build_sdk(kind):
 def test_environment(kind):
     env = os.environ.copy()
     if kind == 'windows':
-        names = ('Qt6Core.dll', 'Qt6Network.dll', 'obs.dll', 'libobs.dll', 'obs-frontend-api.dll')
-        dirs = set()
-        for name in names:
-            for path in (ROOT / '.deps').rglob(name):
-                if 'Debug' not in str(path):
-                    dirs.add(str(path.parent))
+        # libobs also needs FFmpeg/jansson/etc. from the OBS dependency bin
+        # directories, not just the folders holding obs.dll and Qt itself.
+        dirs = {str(path.parent) for path in (ROOT / '.deps').rglob('*.dll')
+                if 'Debug' not in str(path)}
         env['PATH'] = os.pathsep.join(sorted(dirs)) + os.pathsep + env.get('PATH', '')
     elif kind == 'linux':
         dirs = [str(p.parent) for p in (ROOT / '.ci-sdk').rglob('libobs.so*') if p.is_file()]
