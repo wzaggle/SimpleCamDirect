@@ -75,7 +75,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install build tools
-        run: python -m pip install cmake==3.31.8 ninja==1.11.1.4
+        run: python -m pip install cmake==3.31.10 ninja==1.11.1.4
       - name: Install Ubuntu SDK dependencies
         if: runner.os == 'Linux'
         run: |
