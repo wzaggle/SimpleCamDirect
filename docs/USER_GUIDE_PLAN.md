@@ -42,3 +42,10 @@ muted-blue selected camera, inline Rename with Enter/Escape, post-recall zoom
 inquiry, independent camera queues, and Ctrl+Clear for selected-camera/group
 labels only. Physical camera memory is not erased by Clear. Do not describe
 Ctrl+Clear as clearing all cameras.
+
+## r16 clear/delete update
+
+Ctrl+Clear remains selected-camera/current-group only; Ctrl+Alt+Clear clears
+that group on all camera slots after confirmation. On Mac use Command and
+Command+Option. A nonempty extra group's Delete action offers Clear All and
+Delete or Cancel. The first five groups remain protected. See GROUP_CLEAR_R16.md.

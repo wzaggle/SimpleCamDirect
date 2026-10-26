@@ -46,8 +46,26 @@ int main(int argc, char **argv)
         check(a.presets().pageCount() == 6 && b.presets().pageCount() == 6, "page count shared");
         b.presets().setLabel(5, 0, "Keep this page");
         check(!a.presets().removePageIfBlank(5), "nonblank camera B prevents global page removal");
-        b.presets().clearLabel(5, 0);
-        check(a.presets().removePageIfBlank(5), "globally blank extra page removable");
+        a.presets().setLabel(5, 1, "A group six");
+        b.presets().swapSlots(5, 0, 0, 1);
+        const int bMapBeforeClear = b.presets().slot(5, 0).physicalPreset;
+        b.setEnabled(false);
+        check(!b.presets().clearPageLabelsForAllCameras(-1), "negative all-camera group rejected");
+        check(!b.presets().clearPageLabelsForAllCameras(6), "past-end all-camera group rejected");
+        check(a.presets().presetLabel(5, 1) == "A group six", "invalid clear leaves names unchanged");
+        check(b.presets().clearPageLabelsForAllCameras(5), "all-camera clear delegates from group member");
+        bool allBlank = true;
+        for (int slot = 0; slot < simplecam::PresetCatalog::SlotsPerPage; ++slot)
+            allBlank = allBlank && a.presets().presetLabel(5, slot).isEmpty() && b.presets().presetLabel(5, slot).isEmpty();
+        check(allBlank, "all fourteen labels cleared on enabled and disabled cameras");
+        check(b.presets().slot(5, 0).physicalPreset == bMapBeforeClear, "all-camera clear preserves physical mapping");
+        check(a.presets().presetLabel(0, 0) == "Camera A name", "all-camera clear preserves other groups");
+        check(a.presets().removePageIfBlank(5), "clear-all permits blank extra page deletion");
+        check(a.presets().pageCount() == 5 && b.presets().pageCount() == 5, "group deletion shared across cameras");
+        check(!a.presets().removePageIfBlank(0), "first five groups remain protected");
+        check(!a.presets().removePageIfBlank(5), "cannot delete below five groups");
+        check(a.presets().clearPageLabelsForAllCameras(1), "all-camera clear also works through owner");
+        check(!b.isEnabled(), "clearing names does not enable a disabled camera");
         bool flashed = false, recalledDisabled = false, storedDisabled = false, connectionDisabled = false;
         b.setPresetRecallObserver([&](int, simplecam::CameraRuntime::PresetRecallOrigin) { flashed = true; });
         b.setEnabled(false);

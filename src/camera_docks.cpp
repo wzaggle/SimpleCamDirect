@@ -74,6 +74,22 @@ obs_source_t *currentProgramSceneSource();
 
 namespace {
 
+QString clearGroupShortcutHelp()
+{
+#ifdef Q_OS_MACOS
+	return QStringLiteral("⌘-Clear for all presets. +Option for all cameras.");
+#else
+	return QStringLiteral("Ctrl-Clear for all presets. +Alt for all cameras.");
+#endif
+}
+
+QString groupManagementInstructions()
+{
+	return QStringLiteral("Use ▲▼ to select a Preset Group.\nUse ADD/DEL to manage groups.\n%1\n"
+			      "Swap selects two presets to exchange their position in the grid.")
+		.arg(clearGroupShortcutHelp());
+}
+
 QColor pageColor(int page)
 {
 	static const QColor colors[] = {
@@ -878,9 +894,7 @@ void CameraControlCard::buildUi()
 	auto *groupToolsLayout = new QVBoxLayout(groupToolsWidget_);
 	groupToolsLayout->setContentsMargins(0, 0, 0, 0);
 	groupToolsLayout->setSpacing(1);
-	settingsInstructions_ = new QLabel(QStringLiteral("Use ▲▼ to select a Preset Group.\nUse ADD/DEL to manage groups.\n"
-								  "Clear all camera presets before deleting group\n"
-								  "Swap selects two presets to exchange their position in the grid."), groupToolsWidget_);
+	settingsInstructions_ = new QLabel(groupManagementInstructions(), groupToolsWidget_);
 	settingsInstructions_->setAlignment(Qt::AlignCenter);
 	settingsInstructions_->setWordWrap(true);
 	settingsInstructions_->setStyleSheet(QStringLiteral("QLabel { background:#050505; color:white; padding:2px; font-size:12px; }"));
@@ -907,7 +921,7 @@ void CameraControlCard::buildUi()
 	removePageButton_ = new QToolButton(pageToolsWidget);
 	removePageButton_->setText(QStringLiteral("DEL"));
 	removePageButton_->setFixedSize(36, 17);
-	removePageButton_->setToolTip(QStringLiteral("Remove this blank page"));
+	removePageButton_->setToolTip(QStringLiteral("Delete this group; offers to clear remaining preset labels"));
 	pageTools->addWidget(pageNumberLabel_);
 	pageTools->addWidget(pageDescriptionEdit_, 1);
 	pageTools->addWidget(pageButton_);
@@ -1236,17 +1250,7 @@ void CameraControlCard::buildUi()
 		}
 		refresh();
 	});
-	QObject::connect(removePageButton_, &QToolButton::clicked, this, [this]() {
-		const int page = runtime_->activePage();
-		if (runtime_->presets().removePageIfBlank(page)) {
-			runtime_->setActivePage(std::min(page, runtime_->presets().pageCount() - 1));
-			refreshPresetSourceNames();
-			setStatus(QStringLiteral("Removed the blank page"));
-		} else {
-			setStatus(QStringLiteral("Only a completely blank page above the first five can be removed"), true);
-		}
-		refresh();
-	});
+	QObject::connect(removePageButton_, &QToolButton::clicked, this, [this]() { removeCurrentGroup(); });
 	QObject::connect(setButton_, &QPushButton::clicked, this, [this]() { setMode(mode_ == Mode::Set ? Mode::Recall : Mode::Set); });
 	QObject::connect(renameButton_, &QPushButton::clicked, this,
 			 [this]() { setMode(mode_ == Mode::Rename ? Mode::Recall : Mode::Rename); });
@@ -1256,10 +1260,11 @@ void CameraControlCard::buildUi()
 		pendingSwapSlot_ = -1;
 		refresh();
 	});
-	clearButton_->setToolTip(QStringLiteral("Clear one preset label; Ctrl+Clear clears this camera's current group"));
+	clearButton_->setToolTip(QStringLiteral("Clear one preset label. %1").arg(clearGroupShortcutHelp()));
 	QObject::connect(clearButton_, &QPushButton::clicked, this, [this]() {
-		if (QApplication::keyboardModifiers().testFlag(Qt::ControlModifier))
-			clearCurrentGroup();
+		const auto modifiers = QApplication::keyboardModifiers();
+		if (modifiers.testFlag(Qt::ControlModifier))
+			clearCurrentGroup(modifiers.testFlag(Qt::AltModifier));
 		else
 			setMode(mode_ == Mode::Clear ? Mode::Recall : Mode::Clear);
 	});
@@ -1344,9 +1349,7 @@ void CameraControlCard::refresh()
 		settingsInstructions_->setText(QStringLiteral("Select a preset button to edit its name.\n"
 							      "The updated name is shared with OBS."));
 	else
-		settingsInstructions_->setText(QStringLiteral("Use ▲▼ to select a Preset Group.\nUse ADD/DEL to manage groups.\n"
-							      "Clear this group on every camera before deleting it.\n"
-							      "Swap selects two presets to exchange their position in the grid."));
+		settingsInstructions_->setText(groupManagementInstructions());
 	settingsPromptLabel_->setVisible(false);
 	settingsPromptLabel_->setText(statusLabel_->text());
 	navigationWidget_->setVisible(!settingsMode_);
@@ -1416,7 +1419,9 @@ void CameraControlCard::refreshPageManagement()
 {
 	const int page = runtime_->activePage();
 	addPageButton_->setEnabled(runtime_->presets().pageCount() < runtime_->presets().maxPageCount());
-	removePageButton_->setEnabled(settingsMode_ && runtime_->presets().canRemovePage(page));
+	// Named groups must remain clickable so Delete can offer Clear All and Delete.
+	removePageButton_->setEnabled(settingsMode_ && page >= PresetCatalog::MinimumPages &&
+				      runtime_->presets().pageCount() > PresetCatalog::MinimumPages);
 }
 
 void CameraControlCard::setMode(Mode mode)
@@ -1498,7 +1503,7 @@ bool CameraControlCard::eventFilter(QObject *watched, QEvent *event)
 	return QWidget::eventFilter(watched, event);
 }
 
-void CameraControlCard::clearCurrentGroup()
+void CameraControlCard::clearCurrentGroup(bool allCameras)
 {
 	setMode(Mode::Recall);
 	if (!settingsMode_)
@@ -1508,14 +1513,58 @@ void CameraControlCard::clearCurrentGroup()
 	const int page = runtime_->activePage();
 	const QString description = runtime_->presets().page(page).description;
 	const auto answer = QMessageBox::question(this, QStringLiteral("Clear preset group"),
-		QStringLiteral("Clear ALL preset labels in ‘%1’?").arg(description),
+		(allCameras ? QStringLiteral("Clear ALL preset labels in ‘%1’ on ALL cameras, including disabled cameras?")
+			    : QStringLiteral("Clear ALL preset labels in ‘%1’ for this camera?"))
+			.arg(description) + QStringLiteral("\nStored camera positions will not be erased."),
 		QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
 	if (!self || !target || answer != QMessageBox::Yes)
 		return;
-	if (target->presets().clearPageLabels(page)) {
+	if (page >= target->presets().pageCount() || target->presets().page(page).description != description)
+		return;
+	const bool cleared = allCameras ? target->presets().clearPageLabelsForAllCameras(page)
+				       : target->presets().clearPageLabels(page);
+	if (cleared) {
 		refreshPresetSourceNames();
 		refresh();
 		setStatus(QStringLiteral("Group labels cleared; camera presets were not erased"));
+	}
+}
+
+void CameraControlCard::removeCurrentGroup()
+{
+	setMode(Mode::Recall);
+	if (!settingsMode_)
+		return;
+	QPointer<CameraControlCard> self(this);
+	QPointer<CameraRuntime> target(runtime_);
+	const int page = target->activePage();
+	const int pageCount = target->presets().pageCount();
+	if (page < PresetCatalog::MinimumPages || pageCount <= PresetCatalog::MinimumPages)
+		return;
+	const QString description = target->presets().page(page).description;
+	if (!target->presets().canRemovePage(page)) {
+		QMessageBox confirmation(QMessageBox::Question, QStringLiteral("Delete preset group"),
+			QStringLiteral("‘%1’ still contains preset names on one or more cameras.\n"
+				       "Clear all preset names in this group on ALL cameras and delete the group?\n"
+				       "Stored camera positions will not be erased.").arg(description),
+			QMessageBox::Cancel, this);
+		auto *clearAndDelete = confirmation.addButton(QStringLiteral("Clear All and Delete"), QMessageBox::DestructiveRole);
+		confirmation.setDefaultButton(QMessageBox::Cancel);
+		confirmation.exec();
+		if (!self || !target || confirmation.clickedButton() != clearAndDelete)
+			return;
+		// A modal dialog runs the event loop. Do not clear a different group if
+		// external callbacks changed the catalog while confirmation was open.
+		if (target->presets().pageCount() != pageCount || target->presets().page(page).description != description)
+			return;
+		if (!target->presets().clearPageLabelsForAllCameras(page))
+			return;
+	}
+	if (target->presets().removePageIfBlank(page)) {
+		target->setActivePage(std::min(page, target->presets().pageCount() - 1));
+		refreshPresetSourceNames();
+		refresh();
+		setStatus(QStringLiteral("Preset group deleted"));
 	}
 }
 
@@ -1787,7 +1836,7 @@ CameraControlDock::CameraControlDock(const CameraRuntimeArray &runtimes, QWidget
 	: QWidget(parent), runtimes_(runtimes)
 {
 	setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-	obs_log(LOG_INFO, "[SimpleCamPTZ ResponsiveLayout] build=r13-production-revisions");
+	obs_log(LOG_INFO, "[SimpleCamPTZ ResponsiveLayout] build=r16-group-clear-delete");
 	auto *root = new QVBoxLayout(this);
 	root->setContentsMargins(4, 4, 4, 4);
 	root->setSpacing(2);
@@ -2292,7 +2341,7 @@ void CameraControlDock::logProductionUiDiagnostics(const char *phase) const
 	const QString appCss = qApp->styleSheet();
 	QScreen *screen = this->screen();
 	obs_log(LOG_INFO,
-		"[SimpleCamPTZ ProductionUiDiag] BEGIN build=r13 phase=%s qtRuntime=%s qtHeaders=%s mode=%s cards=%d "
+		"[SimpleCamPTZ ProductionUiDiag] BEGIN build=r16 phase=%s qtRuntime=%s qtHeaders=%s mode=%s cards=%d "
 		"dockContent=%dx%d rowHeight=%d dpr=%.3f logicalDpi=%.2f appStyle=%s appCssLength=%d appCssHash=%s",
 		phase, qVersion(), QT_VERSION_STR, settingsMode_ ? "Settings" : "Controls", dualLayout_ ? 2 : 1,
 		width(), height(), camera1Card_->presetRowHeight_, devicePixelRatioF(), screen ? screen->logicalDotsPerInch() : -1.0,

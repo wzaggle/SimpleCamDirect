@@ -14,3 +14,13 @@
   to converted proxy temporaries). Apply this source-compatible parser correction
   before producing the final same-revision combined package. JSON data and
   serialized command bytes are unchanged. Mac OBS/hardware testing remains pending.
+
+## 2026-10-26 — accepted r16 and macOS package validation
+
+- Save maintainer-accepted group clear/delete behavior and its regression checks.
+- Run 40358713833: all platforms compiled and passed 4/4 suites; Windows and
+  Linux packages succeeded. Mac code signing passed; lipo architecture checking
+  then failed because the input filename followed the variadic -verify_arch list.
+- Put the input filename first, preserving the arm64 validation itself.
+- Rebuild all platforms for the same new source revision. M1 OBS-load and
+  real-camera validation remain separate from build/test/package success.

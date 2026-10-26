@@ -124,3 +124,16 @@ not Flatpak/Snap. A successful CI build does not prove OBS load/camera behavior.
 The current Properties adapter retains the r14 deferred probe/280px baseline
 but removes its temporary geometry logs. Do not restore the Show-time-only
 identification check: OBS queues its property field construction.
+
+## Group clearing and deletion (2026-10-26, r16)
+
+The maintainer authorized Ctrl+Alt+Clear to blank the current group's labels
+across all camera slots, including disabled slots. Ctrl+Clear stays local to
+the selected camera. Use Command / Command+Option on macOS under Qt's normal
+modifier mapping. Do not change host modifier settings. Clear never sends a
+camera preset erase or changes physical mappings.
+Delete remains unavailable for the first five groups. Nonblank extra groups
+now allow a Clear All and Delete / Cancel confirmation; clear names across
+all cameras before calling the existing blank-only deletion guard. Cancel
+must leave names and group count unchanged. Preserve five groups minimum.
+See docs/GROUP_CLEAR_R16.md for validation and operator checks.

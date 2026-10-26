@@ -216,6 +216,23 @@ bool PresetCatalog::clearPageLabels(int pageIndex)
 	return true;
 }
 
+bool PresetCatalog::clearPageLabelsForAllCameras(int pageIndex)
+{
+	if (groupOwner_)
+		return groupOwner_->clearPageLabelsForAllCameras(pageIndex);
+	if (pageIndex < 0 || pageIndex >= pages_.size())
+		return false;
+	// Validate the whole shared group before changing any camera's names.
+	for (const PresetCatalog *member : groupMembers_) {
+		if (pageIndex >= member->pages_.size())
+			return false;
+	}
+	clearPageLabels(pageIndex);
+	for (PresetCatalog *member : groupMembers_)
+		member->clearPageLabels(pageIndex);
+	return true;
+}
+
 bool PresetCatalog::swapSlots(int pageA, int slotA, int pageB, int slotB)
 {
 	if (!validSlot(pageA, slotA) || !validSlot(pageB, slotB) || (pageA == pageB && slotA == slotB))

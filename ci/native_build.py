@@ -141,7 +141,7 @@ def package(kind, build, output):
             raise RuntimeError('Expected staged simplecamptz.plugin bundle missing')
         run('codesign', '--force', '--deep', '--sign', '-', bundle)
         run('codesign', '--verify', '--deep', '--strict', bundle)
-        run('lipo', '-verify_arch', 'arm64', bundle / 'Contents/MacOS/simplecamptz')
+        run('lipo', bundle / 'Contents/MacOS/simplecamptz', '-verify_arch', 'arm64')
         run('otool', '-L', bundle / 'Contents/MacOS/simplecamptz')
         # A .tar.gz keeps bundle symlinks and permissions intact through the
         # final all-platform artifact ZIP.

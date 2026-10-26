@@ -70,3 +70,17 @@ The old manual Single/Dual toolbar, forced dual-width Settings, fixed 34px prese
 - Cloud setup removes that temporary Properties tracing and adds native build
   orchestration. Platform build results and first M1/Ubuntu OBS load remain
   separate gates. See CLOUD_BUILDS.md for exact operation and limitations.
+
+## 2026-10-26 — r16 group-clear/delete accepted in Windows
+
+- Maintainer reported the r16 overlay passes and authorized GitHub save/rebuild.
+- Ctrl+Alt+Clear clears the active group on all camera slots after confirmation,
+  including disabled slots; Ctrl+Clear remains local to the selected camera.
+- Nonempty extra-group deletion offers Clear All and Delete or Cancel.
+- Physical camera memory and surviving mappings stay unchanged; five base
+  groups remain protected. Mac help uses Command/Option.
+- Local runtime-state regression: 35 checks, zero failures. Dock source syntax
+  check passed against Qt 6.4.2 and OBS 32.2.1. M1 OBS acceptance is pending.
+- Prior cloud run 40358713833 compiled all platforms and passed all four suites
+  on each. Mac packaging alone failed because lipo arguments were in the wrong
+  order. Correct the packaging invocation and produce one same-revision set.

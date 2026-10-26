@@ -56,6 +56,7 @@ public:
 	bool setLabel(int pageIndex, int slotIndex, const QString &label);
 	bool clearLabel(int pageIndex, int slotIndex);
 	bool clearPageLabels(int pageIndex);
+	bool clearPageLabelsForAllCameras(int pageIndex);
 	bool swapSlots(int pageA, int slotA, int pageB, int slotB);
 	int allocatePhysicalPreset(int pageIndex, int slotIndex, int allowedCapacity = 0);
 

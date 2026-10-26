@@ -56,7 +56,8 @@ private:
 	void updateCameraTitleStyle();
 	void beginPresetRename(int slotIndex);
 	void finishPresetRename(bool commit);
-	void clearCurrentGroup();
+	void clearCurrentGroup(bool allCameras);
+	void removeCurrentGroup();
 	bool eventFilter(QObject *watched, QEvent *event) override;
 
 	CameraRuntime *runtime_ = nullptr;
