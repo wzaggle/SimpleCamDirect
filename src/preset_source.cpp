@@ -8,7 +8,20 @@
 #include <obs-module.h>
 #include <util/base.h>
 
+#include <QApplication>
+#include <QComboBox>
 #include <QCoreApplication>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QEvent>
+#include <QLayout>
+#include <QMargins>
+#include <QSizePolicy>
+#include <QPointer>
+#include <QScrollArea>
+#include <QSplitter>
+#include <QTimer>
+#include <QVariant>
 #include <QMetaObject>
 
 #include <algorithm>
@@ -44,6 +57,68 @@ std::mutex liveSourcesMutex;
 std::vector<struct PresetSourceData *> liveSources;
 
 QString makeDisplayName(const struct PresetSourceData &data);
+
+const char *sourceText(const char *key, const char *fallback)
+{
+	const char *translated = obs_module_text(key);
+	return translated && std::strcmp(translated, key) != 0 ? translated : fallback;
+}
+
+// OBS has no public API for a source-specific Properties size. Match only our
+// source's camera-combo tooltip inside the known host Properties dialog. No
+// private OBS headers/ABI, global settings or fixed-size constraints are used.
+constexpr char kPropertiesMarker[] = "Select the camera for this SimpleCamPTZ preset source.";
+
+class CompactPresetProperties final : public QObject {
+public:
+	explicit CompactPresetProperties(QObject *parent) : QObject(parent) {}
+protected:
+	bool eventFilter(QObject *watched, QEvent *event) override
+	{
+		if (event->type() != QEvent::Show || !watched->inherits("OBSBasicProperties"))
+			return false;
+		auto *dialog = qobject_cast<QDialog *>(watched);
+		if (!dialog || dialog->property("simplecamptzPropertiesProbeStarted").toBool())
+			return false;
+		dialog->setProperty("simplecamptzPropertiesProbeStarted", true);
+		QPointer<QDialog> guard(dialog);
+		QTimer::singleShot(0, this, [this, guard]() { probe(guard, 0); });
+		return false;
+	}
+private:
+	void probe(QPointer<QDialog> guard, int attempt)
+	{
+		if (!guard || !guard->isVisible()) return;
+		bool ours = false;
+		for (QComboBox *combo : guard->findChildren<QComboBox *>())
+			ours = ours || combo->toolTip() == QString::fromUtf8(kPropertiesMarker);
+		auto *container = guard->findChild<QWidget *>(QStringLiteral("PropertiesContainer"));
+		auto *splitter = guard->findChild<QSplitter *>(QStringLiteral("windowSplitter"));
+		if (!ours || !container || !container->layout() || !splitter) {
+			if (attempt < 19)
+				QTimer::singleShot(25, this, [this, guard, attempt]() { probe(guard, attempt + 1); });
+			return;
+		}
+		splitter->setMinimumHeight(0);
+		if (QWidget *preview = guard->findChild<QWidget *>(QStringLiteral("previewFrame"))) preview->hide();
+		const int formHeight = container->layout()->sizeHint().height();
+		for (QWidget *parent = container->parentWidget(); parent && parent != guard.data(); parent = parent->parentWidget()) {
+			if (auto *view = qobject_cast<QScrollArea *>(parent)) {
+				view->setMinimumHeight(formHeight + 12);
+				break;
+			}
+		}
+		if (guard->layout()) {
+			guard->layout()->invalidate();
+			guard->layout()->activate();
+		}
+		auto *buttons = guard->findChild<QDialogButtonBox *>();
+		const int footer = buttons ? buttons->sizeHint().height() : 36;
+		const int target = std::max(280, std::max(guard->minimumSizeHint().height(), formHeight + footer + 56));
+		guard->resize(guard->width(), target);
+	}
+};
+QPointer<CompactPresetProperties> propertiesFilter;
 
 struct ReferenceCountContext {
 	obs_source_t *target = nullptr;
@@ -98,7 +173,7 @@ void refreshSourceName(PresetSourceData *data, bool referencedMoreThanOnce = fal
 	}
 	QString display = makeDisplayName(*data);
 	if (referencedMoreThanOnce)
-		display = QStringLiteral("<span style=\"color:#FF6050;\">%1 *</span>").arg(display);
+		display = QStringLiteral("<span style=\"color:#FF6050;\">%1 *</span>").arg(display.toHtmlEscaped());
 	const QByteArray displayName = display.toUtf8();
 	const char *currentName = obs_source_get_name(data->source);
 	if (!currentName || display != QString::fromUtf8(currentName))
@@ -162,8 +237,7 @@ QString makeDisplayName(const PresetSourceData &data)
 	const QString preset = data.presetLabel.trimmed().isEmpty()
 			       ? QStringLiteral("Preset %1").arg(data.logicalPreset)
 			       : data.presetLabel;
-	return QStringLiteral("Move %1 to <i><b>%2</b></i>")
-		.arg(camera.toHtmlEscaped(), preset.toHtmlEscaped());
+	return QStringLiteral("Move %1 to %2").arg(camera, preset);
 }
 
 void sourceUpdate(void *opaque, obs_data_t *settings)
@@ -202,7 +276,7 @@ void sourceDestroy(void *opaque)
 
 const char *sourceName(void *)
 {
-	return obs_module_text("SimpleCamPTZ.PresetSource");
+	return sourceText("SimpleCamPTZ.PresetSource", "SimpleCam Preset");
 }
 
 void sourceDefaults(obs_data_t *settings)
@@ -244,26 +318,27 @@ obs_properties_t *sourceProperties(void *opaque)
 	const auto *sourceData = static_cast<const PresetSourceData *>(opaque);
 	const int currentCamera = sourceData ? sourceData->cameraIndex : 0;
 	auto *properties = obs_properties_create();
-	auto *camera = obs_properties_add_list(properties, "camera", obs_module_text("SimpleCamPTZ.Camera"),
+	auto *camera = obs_properties_add_list(properties, "camera", sourceText("SimpleCamPTZ.Camera", "Camera"),
 						       OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_STRING);
 	for (int index = 0; index < CameraSlotCount; ++index) {
 		const CameraRuntime *runtime = cameraRuntime(index);
-		const QByteArray label = (runtime ? runtime->cameraName() : QStringLiteral("Camera %1").arg(index + 1)).toUtf8();
+		const QByteArray label = (runtime ? runtime->cameraName() + (runtime->isEnabled() ? QString() : QStringLiteral(" (disabled)")) : QStringLiteral("Camera %1").arg(index + 1)).toUtf8();
 		const QByteArray value = QStringLiteral("Camera %1").arg(index + 1).toUtf8();
 		obs_property_list_add_string(camera, label.constData(), value.constData());
 	}
 	obs_property_set_modified_callback(camera, cameraSelectionChanged);
+	obs_property_set_long_description(camera, kPropertiesMarker);
 
-	auto *preset = obs_properties_add_list(properties, "preset", obs_module_text("SimpleCamPTZ.Preset"),
+	auto *preset = obs_properties_add_list(properties, "preset", sourceText("SimpleCamPTZ.Preset", "Preset"),
 						OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_INT);
 	populatePresetList(preset, currentCamera);
 
-	auto *mode = obs_properties_add_list(properties, "trigger_mode", obs_module_text("SimpleCamPTZ.Trigger"),
+	auto *mode = obs_properties_add_list(properties, "trigger_mode", sourceText("SimpleCamPTZ.Trigger", "Trigger"),
 						OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_INT);
-	obs_property_list_add_int(mode, obs_module_text("SimpleCamPTZ.Program"), kProgramMode);
-	obs_property_list_add_int(mode, obs_module_text("SimpleCamPTZ.Preview"), kPreviewMode);
-	obs_property_list_add_int(mode, obs_module_text("SimpleCamPTZ.Both"), kBothMode);
-	obs_properties_add_int_slider(properties, "delay_seconds", obs_module_text("SimpleCamPTZ.Delay"), 0, 600, 1);
+	obs_property_list_add_int(mode, sourceText("SimpleCamPTZ.Program", "Program"), kProgramMode);
+	obs_property_list_add_int(mode, sourceText("SimpleCamPTZ.Preview", "Preview"), kPreviewMode);
+	obs_property_list_add_int(mode, sourceText("SimpleCamPTZ.Both", "Both"), kBothMode);
+	obs_properties_add_int_slider(properties, "delay_seconds", sourceText("SimpleCamPTZ.Delay", "Delay (seconds)"), 0, 600, 1);
 	return properties;
 }
 
@@ -316,6 +391,10 @@ bool dispatchSceneItem(obs_scene_t *scene, obs_sceneitem_t *item, void *opaque)
 
 void registerPresetSource()
 {
+	if (auto *app = qobject_cast<QApplication *>(QCoreApplication::instance())) {
+		propertiesFilter = new CompactPresetProperties(app);
+		app->installEventFilter(propertiesFilter.data());
+	}
 	static obs_source_info info{};
 	info.id = kSourceId;
 	info.type = OBS_SOURCE_TYPE_INPUT;
@@ -327,6 +406,13 @@ void registerPresetSource()
 	info.get_defaults = sourceDefaults;
 	info.get_properties = sourceProperties;
 	obs_register_source(&info);
+}
+
+void shutdownPresetSourceUi()
+{
+	// Cancel queued dialog work before unloading this module's code.
+	delete propertiesFilter.data();
+	propertiesFilter = nullptr;
 }
 
 void dispatchScenePresets(obs_source_t *sceneSource, int triggerMode)

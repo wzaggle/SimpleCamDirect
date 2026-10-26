@@ -18,6 +18,35 @@
         "ENABLE_QT": "ON",
         "BUILD_TESTING": "ON"
       }
+    },
+    {
+      "name": "macos-arm64",
+      "displayName": "SimpleCamPTZ - Apple Silicon",
+      "generator": "Xcode",
+      "binaryDir": "${sourceDir}/out/build/simplecamptz-macos-arm64",
+      "cacheVariables": {
+        "CMAKE_OSX_ARCHITECTURES": "arm64",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "13.0",
+        "SIMPLECAM_USE_EXTERNAL_SDK": "ON",
+        "SIMPLECAM_SKIP_AUTO_PACKAGE": "ON",
+        "ENABLE_FRONTEND_API": "ON",
+        "ENABLE_QT": "ON",
+        "BUILD_TESTING": "ON"
+      }
+    },
+    {
+      "name": "linux-x64",
+      "displayName": "SimpleCamPTZ - Ubuntu 24.04 x64",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/build/simplecamptz-linux-x64",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_INSTALL_LIBDIR": "lib/x86_64-linux-gnu",
+        "CMAKE_INSTALL_DATAROOTDIR": "share",
+        "ENABLE_FRONTEND_API": "ON",
+        "ENABLE_QT": "ON",
+        "BUILD_TESTING": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -32,6 +61,16 @@
       "displayName": "Windows RelWithDebInfo",
       "configurePreset": "windows-x64",
       "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "macos-arm64-relwithdebinfo",
+      "configurePreset": "macos-arm64",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "linux-x64-relwithdebinfo",
+      "configurePreset": "linux-x64",
+      "configuration": "RelWithDebInfo"
     }
   ],
   "testPresets": [
@@ -39,7 +78,9 @@
       "name": "windows-debug",
       "configurePreset": "windows-x64",
       "configuration": "Debug",
-      "output": {"outputOnFailure": true}
+      "output": {
+        "outputOnFailure": true
+      }
     }
   ]
 }

@@ -93,3 +93,18 @@ if(BUILD_TESTING)
   add_test(NAME simplecamptz_profile_tests
     COMMAND simplecamptz_profile_tests "${CMAKE_CURRENT_SOURCE_DIR}/data/cameras/avipas-av-1280w.visca.json")
 endif()
+
+if(BUILD_TESTING)
+  include("${CMAKE_CURRENT_SOURCE_DIR}/tests/runtime_state_tests.cmake")
+endif()
+
+if(WIN32)
+  add_custom_target(build-all-platforms
+    COMMAND powershell.exe -NoProfile -ExecutionPolicy Bypass
+      -File "${CMAKE_CURRENT_SOURCE_DIR}/build-all-platforms.ps1"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    COMMENT "Run GitHub Actions for the current committed revision and download all packages"
+    USES_TERMINAL
+    VERBATIM
+  )
+endif()

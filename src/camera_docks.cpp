@@ -10,6 +10,12 @@
 #include <QApplication>
 #include <QByteArray>
 #include <QColor>
+#include <QCheckBox>
+#include <QCryptographicHash>
+#include <QFontInfo>
+#include <QScreen>
+#include <QRegion>
+#include <QRegularExpression>
 #include <QComboBox>
 #include <QDockWidget>
 #include <QCursor>
@@ -24,7 +30,8 @@
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QIcon>
-#include <QInputDialog>
+#include <QKeyEvent>
+#include <QMessageBox>
 #include <QLabel>
 #include <QLineEdit>
 #include <QLayout>
@@ -90,10 +97,19 @@ QString buttonStyle(const QColor &background, const QString &foreground = QStrin
 
 // One sizing contract for every button in the bottom function row,
 // including the protected power subclass and the settings gear.
+QString bottomRowGeometryStyle()
+{
+	// Override all inherited size-box declarations, not just min-height.
+	// The 24px content height plus the normal 1px borders gives a 26px
+	// minimum. Keep a generous maximum so every bottom button can grow.
+	// Leave room below QWIDGETSIZE_MAX for checked/pressed border widths.
+	return QStringLiteral(" QPushButton { margin:0px; padding:0px; height:24px; "
+			      "min-height:24px; max-height:16777200px; }");
+}
+
 QString bottomFunctionStyle(const QColor &background)
 {
-	return buttonStyle(background) + QStringLiteral(
-		" QPushButton { margin:0px; padding:0px; min-height:24px; }");
+	return buttonStyle(background) + bottomRowGeometryStyle();
 }
 
 void useBottomRowSizing(QPushButton *button)
@@ -138,6 +154,102 @@ QString toggleButtonStyle(const QColor &background, bool checked)
 		return QStringLiteral("QPushButton { background:#168A3A; color:white; border:3px solid #FFF76A; "
 				      "font-weight:bold; padding:0px; }");
 	return buttonStyle(background);
+}
+
+// Read-only production/development comparison; do not polish widgets,
+// activate layouts, change properties or resize anything in these helpers.
+QByteArray productionCssHash(const QString &css)
+{
+	return QCryptographicHash::hash(css.toUtf8(), QCryptographicHash::Sha256).toHex();
+}
+
+void logProductionWidget(const char *phase, const QByteArray &role, QWidget *widget)
+{
+	if (!widget)
+		return;
+	const QRect geometry = widget->geometry();
+	const QRect contents = widget->contentsRect();
+	const QRect visible = widget->visibleRegion().boundingRect();
+	const QSize hint = widget->sizeHint();
+	const QSize minHint = widget->minimumSizeHint();
+	const QSizePolicy policy = widget->sizePolicy();
+	const QMargins margins = widget->contentsMargins();
+	const QFont font = widget->font();
+	const QFontInfo resolved(font);
+	const QFontMetrics metrics(font);
+	QRect ancestorClip = widget->rect();
+	for (QWidget *parent = widget->parentWidget(); parent; parent = parent->parentWidget()) {
+		ancestorClip = ancestorClip.intersected(QRect(widget->mapFromGlobal(parent->mapToGlobal(QPoint(0, 0))), parent->size()));
+		if (parent->isWindow())
+			break;
+	}
+	QRect itemGeometry;
+	int itemAlignment = -1;
+	if (QWidget *parent = widget->parentWidget()) {
+		if (QLayout *parentLayout = parent->layout()) {
+			// Search nested layouts as well as the direct parent layout.
+			const auto findItem = [&](const auto &self, QLayout *layout) -> QLayoutItem * {
+				for (int index = 0; index < layout->count(); ++index) {
+					QLayoutItem *item = layout->itemAt(index);
+					if (item->widget() == widget)
+						return item;
+					if (item->layout()) {
+						if (QLayoutItem *found = self(self, item->layout()))
+							return found;
+					}
+				}
+				return nullptr;
+			};
+			if (QLayoutItem *item = findItem(findItem, parentLayout)) {
+				itemGeometry = item->geometry();
+				itemAlignment = int(item->alignment());
+			}
+		}
+	}
+	obs_log(LOG_INFO,
+		"[SimpleCamPTZ ProductionUiDiag] phase=%s role=%s class=%s visible=%d geom=%d,%d,%d,%d "
+		"contents=%d,%d,%d,%d visibleBounds=%d,%d,%d,%d ancestorClip=%d,%d,%d,%d "
+		"item=%d,%d,%d,%d alignment=%d hint=%dx%d minHint=%dx%d min=%dx%d max=%dx%d "
+		"policy=%d,%d margins=%d,%d,%d,%d fontRequested=%s fontResolved=%s point=%.2f pixel=%d "
+		"fontHeight=%d ascent=%d descent=%d styleClass=%s styleName=%s cssHash=%s",
+		phase, role.constData(), widget->metaObject()->className(), widget->isVisible() ? 1 : 0,
+		geometry.x(), geometry.y(), geometry.width(), geometry.height(), contents.x(), contents.y(), contents.width(), contents.height(),
+		visible.x(), visible.y(), visible.width(), visible.height(), ancestorClip.x(), ancestorClip.y(), ancestorClip.width(), ancestorClip.height(),
+		itemGeometry.x(), itemGeometry.y(), itemGeometry.width(), itemGeometry.height(), itemAlignment,
+		hint.width(), hint.height(), minHint.width(), minHint.height(), widget->minimumWidth(), widget->minimumHeight(),
+		widget->maximumWidth(), widget->maximumHeight(), int(policy.horizontalPolicy()), int(policy.verticalPolicy()),
+		margins.left(), margins.top(), margins.right(), margins.bottom(), font.family().toUtf8().constData(),
+		resolved.family().toUtf8().constData(), font.pointSizeF(), font.pixelSize(), metrics.height(), metrics.ascent(), metrics.descent(),
+		widget->style()->metaObject()->className(), widget->style()->objectName().toUtf8().constData(),
+		productionCssHash(widget->styleSheet()).constData());
+	if (auto *button = qobject_cast<QPushButton *>(widget)) {
+		// Reconstruct standard option flags for comparable content metrics.
+		// These are style-derived bounds, not a screenshot of actual pixels.
+		QStyleOptionButton option;
+		option.initFrom(button);
+		option.text = button->text();
+		option.icon = button->icon();
+		option.iconSize = button->iconSize();
+		if (button->isChecked()) option.state |= QStyle::State_On;
+		else option.state |= QStyle::State_Off;
+		if (button->isDown()) option.state |= QStyle::State_Sunken;
+		if (button->isDefault()) option.features |= QStyleOptionButton::DefaultButton;
+		if (button->autoDefault()) option.features |= QStyleOptionButton::AutoDefaultButton;
+		if (button->isFlat()) option.features |= QStyleOptionButton::Flat;
+		const QRect styleContents = button->style()->subElementRect(QStyle::SE_PushButtonContents, &option, button);
+		QString css = button->styleSheet();
+		css.replace(QLatin1Char('\n'), QLatin1Char(' '));
+		obs_log(LOG_INFO,
+			"[SimpleCamPTZ ProductionUiButton] phase=%s role=%s checked=%d checkable=%d down=%d default=%d autoDefault=%d flat=%d "
+			"styleContents=%d,%d,%d,%d buttonMargin=%d defaultIndicator=%d shiftV=%d shiftH=%d css=%s",
+			phase, role.constData(), button->isChecked() ? 1 : 0, button->isCheckable() ? 1 : 0, button->isDown() ? 1 : 0,
+			button->isDefault() ? 1 : 0, button->autoDefault() ? 1 : 0, button->isFlat() ? 1 : 0,
+			styleContents.x(), styleContents.y(), styleContents.width(), styleContents.height(),
+			button->style()->pixelMetric(QStyle::PM_ButtonMargin, &option, button),
+			button->style()->pixelMetric(QStyle::PM_ButtonDefaultIndicator, &option, button),
+			button->style()->pixelMetric(QStyle::PM_ButtonShiftVertical, &option, button),
+			button->style()->pixelMetric(QStyle::PM_ButtonShiftHorizontal, &option, button), css.toUtf8().constData());
+	}
 }
 
 void logLayoutWidgetMetrics(const char *phase, int transition, int resizeRequest, const char *name, const QWidget *widget)
@@ -372,7 +484,12 @@ public:
 		setFixedSize(36, 40);
 		setCheckable(true);
 		setChecked(true);
-		setStyleSheet(QStringLiteral("QPushButton { background:transparent; border:0; padding:0px; }"));
+		// These are custom-painted 36x40 cells. Explicitly clear the host's
+		// height/max-height and margins, which otherwise conflict with fixedSize
+		// and place the cell partly below its 40px selector container.
+		setStyleSheet(QStringLiteral("QPushButton { background:transparent; border:0; margin:0px; padding:0px; "
+					    "width:36px; min-width:36px; max-width:36px; "
+					    "height:40px; min-height:40px; max-height:40px; }"));
 		setCursor(Qt::PointingHandCursor);
 		setToolTip(QStringLiteral("Click to change which camera this card controls"));
 	}
@@ -397,7 +514,7 @@ protected:
 		QPainter painter(this);
 		painter.setRenderHint(QPainter::Antialiasing);
 		painter.setPen(QPen(QColor("#FFFFFF"), 1));
-		painter.setBrush(isChecked() ? QColor("#83C9EE") : QColor("#48B43D"));
+		painter.setBrush(isChecked() ? QColor("#3C96C9") : QColor("#48B43D"));
 		// Keep the 1 px outline fully inside the paint device. A 1 px inset
 		// places the lower/right half of the pen on the widget boundary, where
 		// Qt clips it and makes the rounded bottom corners look squared off.
@@ -408,11 +525,11 @@ protected:
 		// Center the 22 px number circle within the 33 px rounded-square face.
 		const QRectF circle(7, 6.5, 22, 22);
 		painter.setPen(Qt::NoPen);
-		painter.setBrush(onAir_ ? (isChecked() ? QColor("#050505") : QColor("#FFFF00"))
+		painter.setBrush(onAir_ ? (isChecked() ? QColor("#050505") : QColor("#FF9999"))
 					: (isChecked() ? QColor("#050505") : QColor("#D4D7D8")));
 		painter.drawEllipse(circle);
-		painter.setPen(onAir_ ? (isChecked() ? QColor("#FFFF00") : QColor("#050505"))
-				       : (isChecked() ? QColor("#86C9EE") : QColor("#168A3A")));
+		painter.setPen(onAir_ ? (isChecked() ? QColor("#FF9999") : QColor("#050505"))
+				       : (isChecked() ? QColor("#63B5E8") : QColor("#168A3A")));
 		QFont font = painter.font();
 		font.setBold(true);
 		font.setPointSize(11);
@@ -644,6 +761,7 @@ CameraControlCard::CameraControlCard(CameraRuntime &runtime, int cameraNumber, b
 
 void CameraControlCard::setRuntime(CameraRuntime &runtime, int cameraNumber)
 {
+	finishPresetRename(false);
 	runtime_ = &runtime;
 	cameraNumber_ = cameraNumber;
 	for (int index = 0; index < CameraSlotCount; ++index) {
@@ -673,17 +791,22 @@ void CameraControlCard::setOnAirCamera(int cameraIndex)
 
 void CameraControlCard::updateCameraTitleStyle()
 {
-	const bool onAir = onAirCameraIndex_ >= 0 && cameraNumber_ - 1 == onAirCameraIndex_;
+	const bool onAir = runtime_->isEnabled() && onAirCameraIndex_ >= 0 && cameraNumber_ - 1 == onAirCameraIndex_;
 	if (!cameraTitle_ || onAir == cameraTitleOnAir_)
 		return;
 	cameraTitleOnAir_ = onAir;
 	cameraTitle_->setStyleSheet(QStringLiteral("color:%1; font-family:'Arial Black'; font-size:20px; font-weight:900;")
-				   .arg(onAir ? QStringLiteral("#FFFF00") : QStringLiteral("#46C828")));
+				   .arg(onAir ? QStringLiteral("#FF9999") : QStringLiteral("#46C828")));
 }
 
 void CameraControlCard::bindZoomPositionObserver()
 {
 	QPointer<CameraControlCard> self(this);
+	const int lastValue = runtime_->lastZoomSliderValue();
+	{
+		const QSignalBlocker blocker(zoomSlider_);
+		zoomSlider_->setValue(lastValue >= 0 ? lastValue : zoomSlider_->minimum());
+	}
 	runtime_->setZoomPositionObserver([self](int sliderValue) {
 		if (!self || !self->zoomSlider_)
 			return;
@@ -756,7 +879,7 @@ void CameraControlCard::buildUi()
 	groupToolsLayout->setContentsMargins(0, 0, 0, 0);
 	groupToolsLayout->setSpacing(1);
 	settingsInstructions_ = new QLabel(QStringLiteral("Use ▲▼ to select a Preset Group.\nUse ADD/DEL to manage groups.\n"
-								  "All presets in a group must be cleared to delete the group.\n"
+								  "Clear all camera presets before deleting group\n"
 								  "Swap selects two presets to exchange their position in the grid."), groupToolsWidget_);
 	settingsInstructions_->setAlignment(Qt::AlignCenter);
 	settingsInstructions_->setWordWrap(true);
@@ -810,10 +933,21 @@ void CameraControlCard::buildUi()
 		button->setFixedHeight(presetRowHeight_);
 		button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 		presetButtons_.append(button);
+		button->installEventFilter(this);
 		// Match SimpleCamQt's camera-card layout: two columns by seven rows.
 		presetGrid->addWidget(button, slot % 7, slot / 7);
 		QObject::connect(button, &QPushButton::clicked, this, [this, slot]() { handlePresetButton(slot); });
 	}
+
+	// Child overlay: editing never adds a layout row or changes button geometry.
+	presetNameEditor_ = new QLineEdit(this);
+	presetNameEditor_->setMaxLength(32);
+	presetNameEditor_->setAlignment(Qt::AlignCenter);
+	presetNameEditor_->setStyleSheet(QStringLiteral(
+		"QLineEdit { margin:0px; padding:0px 2px; border:1px solid #FFFF00; "
+		"border-radius:0px; background:#FFF8CF; color:black; min-height:0px; max-height:16777200px; }"));
+	presetNameEditor_->installEventFilter(this);
+	presetNameEditor_->hide();
 
 	auto *actions = new QHBoxLayout();
 	actions->setContentsMargins(0, 0, 0, 0);
@@ -1047,14 +1181,14 @@ void CameraControlCard::buildUi()
 		cameraFunctionRow->addWidget(button, 1);
 	}
 	QObject::connect(backlightButton_, &QPushButton::toggled, this, [this, self](bool enabled) {
-		backlightButton_->setStyleSheet(toggleButtonStyle(QColor("#3C96C9"), enabled) + QStringLiteral(" QPushButton { margin:0px; padding:0px; min-height:24px; }"));
+		backlightButton_->setStyleSheet(toggleButtonStyle(QColor("#3C96C9"), enabled) + bottomRowGeometryStyle());
 		runtime_->backlight(enabled, [self, enabled](bool ok, const QString &message) {
 			if (self)
 				self->setStatus(ok ? QStringLiteral("BackLight %1").arg(enabled ? "on" : "off") : message, !ok);
 		});
 	});
 	QObject::connect(exposureButton_, &QPushButton::toggled, this, [this, self](bool enabled) {
-		exposureButton_->setStyleSheet(toggleButtonStyle(QColor("#3C96C9"), enabled) + QStringLiteral(" QPushButton { margin:0px; padding:0px; min-height:24px; }"));
+		exposureButton_->setStyleSheet(toggleButtonStyle(QColor("#3C96C9"), enabled) + bottomRowGeometryStyle());
 		runtime_->exposureCompensation(enabled, [self, enabled](bool ok, const QString &message) {
 			if (self)
 				self->setStatus(ok ? QStringLiteral("Exposure compensation %1").arg(enabled ? "on" : "off") : message, !ok);
@@ -1122,7 +1256,13 @@ void CameraControlCard::buildUi()
 		pendingSwapSlot_ = -1;
 		refresh();
 	});
-	QObject::connect(clearButton_, &QPushButton::clicked, this, [this]() { setMode(mode_ == Mode::Clear ? Mode::Recall : Mode::Clear); });
+	clearButton_->setToolTip(QStringLiteral("Clear one preset label; Ctrl+Clear clears this camera's current group"));
+	QObject::connect(clearButton_, &QPushButton::clicked, this, [this]() {
+		if (QApplication::keyboardModifiers().testFlag(Qt::ControlModifier))
+			clearCurrentGroup();
+		else
+			setMode(mode_ == Mode::Clear ? Mode::Recall : Mode::Clear);
+	});
 }
 
 void CameraControlCard::setSettingsMode(bool enabled)
@@ -1147,13 +1287,19 @@ void CameraControlCard::refreshView()
 void CameraControlCard::refresh()
 {
 	const int pageIndex = runtime_->activePage();
+	if (renameSlot_ >= 0 && (renameRuntime_ != runtime_ || renamePage_ != pageIndex))
+		finishPresetRename(false);
 	const auto &page = runtime_->presets().page(pageIndex);
 	pageDescription_->setText(page.description);
 	pageDescription_->setVisible(!settingsMode_);
 	if (pageDescriptionSuppressed_)
 		pageDescription_->clear();
 	cameraSelectorWidget_->setVisible(true);
-	cameraTitle_->setText(runtime_->cameraName());
+	for (int index = 0; index < CameraSlotCount; ++index) {
+		CameraRuntime *candidate = cameraRuntime(index);
+		cameraSelectButtons_[index]->setVisible(candidate && candidate->isEnabled());
+	}
+	cameraTitle_->setText(runtime_->isEnabled() ? runtime_->cameraName() : QStringLiteral("No cameras enabled"));
 	updateCameraTitleStyle();
 	const bool profileLoaded = runtime_->hasLoadedProfile();
 	const int absoluteZoomTemplates = runtime_->zoomAbsoluteTemplateCount();
@@ -1199,7 +1345,7 @@ void CameraControlCard::refresh()
 							      "The updated name is shared with OBS."));
 	else
 		settingsInstructions_->setText(QStringLiteral("Use ▲▼ to select a Preset Group.\nUse ADD/DEL to manage groups.\n"
-							      "All presets in a group must be cleared to delete the group.\n"
+							      "Clear this group on every camera before deleting it.\n"
 							      "Swap selects two presets to exchange their position in the grid."));
 	settingsPromptLabel_->setVisible(false);
 	settingsPromptLabel_->setText(statusLabel_->text());
@@ -1232,8 +1378,8 @@ void CameraControlCard::refresh()
 	for (auto *button : {backlightButton_, exposureButton_, powerButton_})
 		useBottomRowSizing(button);
 	manualFocusButton_->setStyleSheet(toggleButtonStyle(QColor("#3C96C9"), manualFocusButton_->isChecked()));
-	backlightButton_->setStyleSheet(toggleButtonStyle(QColor("#3C96C9"), backlightButton_->isChecked()) + QStringLiteral(" QPushButton { margin:0px; padding:0px; min-height:24px; }"));
-	exposureButton_->setStyleSheet(toggleButtonStyle(QColor("#3C96C9"), exposureButton_->isChecked()) + QStringLiteral(" QPushButton { margin:0px; padding:0px; min-height:24px; }"));
+	backlightButton_->setStyleSheet(toggleButtonStyle(QColor("#3C96C9"), backlightButton_->isChecked()) + bottomRowGeometryStyle());
+	exposureButton_->setStyleSheet(toggleButtonStyle(QColor("#3C96C9"), exposureButton_->isChecked()) + bottomRowGeometryStyle());
 	pageButton_->setText(QStringLiteral("▲▼"));
 	pageButton_->setToolTip(QStringLiteral("Click to cycle preset groups (%1 of %2)").arg(pageIndex + 1).arg(runtime_->presets().pageCount()));
 
@@ -1270,18 +1416,12 @@ void CameraControlCard::refreshPageManagement()
 {
 	const int page = runtime_->activePage();
 	addPageButton_->setEnabled(runtime_->presets().pageCount() < runtime_->presets().maxPageCount());
-	bool allLabelsBlank = true;
-	for (int index = 0; index < PresetCatalog::SlotsPerPage; ++index) {
-		if (!runtime_->presets().slot(page, index).label.trimmed().isEmpty()) {
-			allLabelsBlank = false;
-			break;
-		}
-	}
-	removePageButton_->setEnabled(settingsMode_ && page >= PresetCatalog::MinimumPages && allLabelsBlank);
+	removePageButton_->setEnabled(settingsMode_ && runtime_->presets().canRemovePage(page));
 }
 
 void CameraControlCard::setMode(Mode mode)
 {
+	finishPresetRename(false);
 	const Mode previousMode = mode_;
 	if (!settingsMode_ && (mode == Mode::Swap || mode == Mode::Clear))
 		mode = Mode::Recall;
@@ -1296,6 +1436,86 @@ void CameraControlCard::setMode(Mode mode)
 			setStatus(QStringLiteral("Select a preset button to rename"), false, 0);
 		else if ((previousMode == Mode::Set || previousMode == Mode::Rename) && statusHandler_)
 			statusHandler_(QString(), false, 0);
+	}
+}
+
+void CameraControlCard::beginPresetRename(int slotIndex)
+{
+	finishPresetRename(false);
+	renameRuntime_ = runtime_;
+	renamePage_ = runtime_->activePage();
+	renameSlot_ = slotIndex;
+	mode_ = Mode::Rename;
+	auto *button = presetButtons_.at(slotIndex);
+	presetNameEditor_->setParent(button);
+	presetNameEditor_->setGeometry(button->rect().adjusted(1, 1, -1, -1));
+	presetNameEditor_->setFont(button->font());
+	presetNameEditor_->setText(runtime_->presets().slot(renamePage_, slotIndex).label);
+	presetNameEditor_->show();
+	presetNameEditor_->raise();
+	presetNameEditor_->setFocus(Qt::OtherFocusReason);
+	presetNameEditor_->selectAll();
+}
+
+void CameraControlCard::finishPresetRename(bool commit)
+{
+	if (renameSlot_ < 0 || !presetNameEditor_)
+		return;
+	const int page = renamePage_;
+	const int slot = renameSlot_;
+	const QPointer<CameraRuntime> target = renameRuntime_;
+	const QString text = presetNameEditor_->text();
+	// Clear state before hiding so refresh/camera changes cannot commit twice.
+	renameSlot_ = renamePage_ = -1;
+	renameRuntime_ = nullptr;
+	presetNameEditor_->hide();
+	mode_ = Mode::Recall;
+	if (commit && target && target == runtime_ && target->activePage() == page &&
+	    target->presets().setLabel(page, slot, text)) {
+		refreshPresetSourceNames();
+		refresh();
+		setStatus(QStringLiteral("Preset name saved"));
+		flashPresetButton(slot, "inline-rename");
+	} else {
+		refresh();
+		if (statusHandler_) statusHandler_(QString(), false, 0);
+	}
+}
+
+bool CameraControlCard::eventFilter(QObject *watched, QEvent *event)
+{
+	if (watched == presetNameEditor_ && renameSlot_ >= 0) {
+		if (event->type() == QEvent::KeyPress) {
+			const auto *key = static_cast<QKeyEvent *>(event);
+			if (key->key() == Qt::Key_Return || key->key() == Qt::Key_Enter || key->key() == Qt::Key_Escape) {
+				finishPresetRename(key->key() != Qt::Key_Escape);
+				return true;
+			}
+		}
+	} else if (renameSlot_ >= 0 && watched == presetButtons_.at(renameSlot_) && event->type() == QEvent::Resize) {
+		presetNameEditor_->setGeometry(presetButtons_.at(renameSlot_)->rect().adjusted(1, 1, -1, -1));
+	}
+	return QWidget::eventFilter(watched, event);
+}
+
+void CameraControlCard::clearCurrentGroup()
+{
+	setMode(Mode::Recall);
+	if (!settingsMode_)
+		return;
+	QPointer<CameraControlCard> self(this);
+	QPointer<CameraRuntime> target(runtime_);
+	const int page = runtime_->activePage();
+	const QString description = runtime_->presets().page(page).description;
+	const auto answer = QMessageBox::question(this, QStringLiteral("Clear preset group"),
+		QStringLiteral("Clear ALL preset labels in ‘%1’?").arg(description),
+		QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+	if (!self || !target || answer != QMessageBox::Yes)
+		return;
+	if (target->presets().clearPageLabels(page)) {
+		refreshPresetSourceNames();
+		refresh();
+		setStatus(QStringLiteral("Group labels cleared; camera presets were not erased"));
 	}
 }
 
@@ -1320,21 +1540,9 @@ void CameraControlCard::handlePresetButton(int slotIndex)
 		});
 		return;
 	}
-	case Mode::Rename: {
-		bool accepted = false;
-		const QString current = slot.label;
-		const QString value = QInputDialog::getText(this, QStringLiteral("Rename preset"),
-						   QStringLiteral("Button name:"), QLineEdit::Normal, current, &accepted);
-		setMode(Mode::Recall);
-		if (accepted) {
-			runtime_->presets().setLabel(pageIndex, slotIndex, value);
-			refreshPresetSourceNames();
-			refresh();
-			setStatus(QStringLiteral("Preset name saved"));
-			flashPresetButton(slotIndex);
-		}
+	case Mode::Rename:
+		beginPresetRename(slotIndex);
 		return;
-	}
 	case Mode::Swap:
 		if (pendingSwapPage_ < 0) {
 			pendingSwapPage_ = pageIndex;
@@ -1579,7 +1787,7 @@ CameraControlDock::CameraControlDock(const CameraRuntimeArray &runtimes, QWidget
 	: QWidget(parent), runtimes_(runtimes)
 {
 	setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-	obs_log(LOG_INFO, "[SimpleCamPTZ ResponsiveLayout] build=r9-right-gear-yellow-onair-title");
+	obs_log(LOG_INFO, "[SimpleCamPTZ ResponsiveLayout] build=r13-production-revisions");
 	auto *root = new QVBoxLayout(this);
 	root->setContentsMargins(4, 4, 4, 4);
 	root->setSpacing(2);
@@ -1785,17 +1993,31 @@ CameraControlDock::CameraControlDock(const CameraRuntimeArray &runtimes, QWidget
 		updateSharedGroupIndicator();
 	});
 	refreshTimer->start();
+	productionDiagTimer_ = new QTimer(this);
+	productionDiagTimer_->setSingleShot(true);
+	productionDiagTimer_->setInterval(400);
+	QObject::connect(productionDiagTimer_, &QTimer::timeout, this, [this]() {
+		logProductionUiDiagnostics("settled-layout");
+	});
+	for (int delayMs : {1500, 3500}) {
+		QTimer::singleShot(delayMs, this, [this, delayMs]() {
+			const QByteArray phase = QStringLiteral("startup-%1ms").arg(delayMs).toUtf8();
+			logProductionUiDiagnostics(phase.constData());
+		});
+	}
 	QTimer::singleShot(0, this, [this]() { updateResponsiveLayout(); });
 }
 
 void CameraControlDock::refreshView()
 {
+	normalizeCameraAssignments();
 	if (camera1Card_)
 		camera1Card_->refreshView();
 	if (camera2Card_)
 		camera2Card_->refreshView();
 	updateSharedGroupIndicator();
 	refreshOnAirCamera();
+	updateResponsiveLayout();
 }
 
 void CameraControlDock::bindZoomObservers()
@@ -1806,7 +2028,7 @@ void CameraControlDock::bindZoomObservers()
 	}
 	if (camera1Card_)
 		camera1Card_->bindZoomPositionObserver();
-	if (camera2Card_)
+	if (camera2Card_ && camera2Card_->runtime_ != camera1Card_->runtime_ && camera2Card_->runtime_->isEnabled())
 		camera2Card_->bindZoomPositionObserver();
 }
 
@@ -1958,7 +2180,7 @@ void CameraControlDock::refreshOnAirCamera()
 {
 	CameraFeedScanContext context;
 	for (int index = 0; index < CameraSlotCount; ++index) {
-		if (runtimes_[index])
+		if (runtimes_[index] && runtimes_[index]->isEnabled())
 			context.sourceUuids[index] = runtimes_[index]->cameraFeedSourceUuid();
 	}
 
@@ -2038,10 +2260,11 @@ void CameraControlDock::updateResponsiveLayout()
 	QTimer::singleShot(0, this, [this]() {
 		responsiveLayoutPending_ = false;
 		bindFloatingDock();
+		normalizeCameraAssignments();
 		// No upper hysteresis margin: floating maximum is exactly the compact
 		// two-card width. Never show two cards below their measured minimum.
 		const int threshold = settingsWidth_;
-		const bool nextDual = width() >= threshold;
+		const bool nextDual = enabledCameraCount() >= 2 && width() >= threshold;
 		if (nextDual != dualLayout_) {
 			dualLayout_ = nextDual;
 			moveSettingsGear();
@@ -2059,7 +2282,53 @@ void CameraControlDock::updateResponsiveLayout()
 		updatePresetRowHeight();
 		updateFloatingLimits();
 		positionSharedGroupIndicator();
+		if (productionDiagTimer_)
+			productionDiagTimer_->start();
 	});
+}
+
+void CameraControlDock::logProductionUiDiagnostics(const char *phase) const
+{
+	const QString appCss = qApp->styleSheet();
+	QScreen *screen = this->screen();
+	obs_log(LOG_INFO,
+		"[SimpleCamPTZ ProductionUiDiag] BEGIN build=r13 phase=%s qtRuntime=%s qtHeaders=%s mode=%s cards=%d "
+		"dockContent=%dx%d rowHeight=%d dpr=%.3f logicalDpi=%.2f appStyle=%s appCssLength=%d appCssHash=%s",
+		phase, qVersion(), QT_VERSION_STR, settingsMode_ ? "Settings" : "Controls", dualLayout_ ? 2 : 1,
+		width(), height(), camera1Card_->presetRowHeight_, devicePixelRatioF(), screen ? screen->logicalDotsPerInch() : -1.0,
+		qApp->style()->metaObject()->className(), int(appCss.size()), productionCssHash(appCss).constData());
+	logProductionWidget(phase, "dock-content", const_cast<CameraControlDock *>(this));
+	if (floatingDock_)
+		logProductionWidget(phase, "dock-wrapper", floatingDock_.data());
+	for (int index = 0; index < 2; ++index) {
+		CameraControlCard *card = index == 0 ? camera1Card_ : camera2Card_;
+		if (!card || card->isHidden())
+			continue;
+		const QByteArray prefix = QStringLiteral("card%1/").arg(index + 1).toUtf8();
+		logProductionWidget(phase, prefix + "card", card);
+		logProductionWidget(phase, prefix + "header", card->cameraHeaderWidget_);
+		logProductionWidget(phase, prefix + "selector-container", card->cameraSelectorWidget_);
+		logProductionWidget(phase, prefix + "title", card->cameraTitle_);
+		for (int camera = 0; camera < CameraSlotCount; ++camera)
+			logProductionWidget(phase, prefix + "selector" + QByteArray::number(camera + 1), card->cameraSelectButtons_[camera]);
+		logProductionWidget(phase, prefix + "manual-focus", card->manualFocusButton_);
+		logProductionWidget(phase, prefix + "backlight", card->backlightButton_);
+		logProductionWidget(phase, prefix + "exposure", card->exposureButton_);
+		logProductionWidget(phase, prefix + "power", card->powerButton_);
+		logProductionWidget(phase, prefix + "preset-first", card->presetButtons_.first());
+		logProductionWidget(phase, prefix + "preset-last", card->presetButtons_.last());
+		logLayoutMetrics(phase, 0, 0, (prefix + "bottom-row").constData(), card->bottomFunctionRow_);
+	}
+	logProductionWidget(phase, "settings-gear", settingsButton_);
+	// Include matching host rules, not the entire stylesheet or user config.
+	const QRegularExpression rule(QStringLiteral("([^{}]*QPushButton[^{}]*)\\{([^{}]*)\\}"));
+	auto matches = rule.globalMatch(appCss);
+	int count = 0;
+	while (matches.hasNext() && count < 24) {
+		QString text = matches.next().captured(0).simplified().left(1600);
+		obs_log(LOG_INFO, "[SimpleCamPTZ ProductionUiHostCss] phase=%s rule=%d text=%s", phase, ++count, text.toUtf8().constData());
+	}
+	obs_log(LOG_INFO, "[SimpleCamPTZ ProductionUiDiag] END phase=%s", phase);
 }
 
 void CameraControlDock::moveSettingsGear()
@@ -2158,9 +2427,39 @@ void CameraControlDock::resizeEvent(QResizeEvent *event)
 	updateResponsiveLayout();
 }
 
+int CameraControlDock::enabledCameraCount() const
+{
+	return static_cast<int>(std::count_if(runtimes_.begin(), runtimes_.end(),
+		[](CameraRuntime *runtime) { return runtime && runtime->isEnabled(); }));
+}
+
+void CameraControlDock::normalizeCameraAssignments()
+{
+	QVector<int> enabled;
+	for (int index = 0; index < CameraSlotCount; ++index)
+		if (runtimes_[index] && runtimes_[index]->isEnabled()) enabled.append(index);
+	bool changed = false;
+	for (int cardIndex = 0; cardIndex < 2; ++cardIndex) {
+		int next = cameraAssignments_[cardIndex];
+		if (!enabled.contains(next) || (cardIndex == 1 && next == cameraAssignments_[0])) {
+			for (int candidate : enabled) {
+				if (cardIndex == 0 || candidate != cameraAssignments_[0]) { next = candidate; break; }
+			}
+		}
+		CameraControlCard *card = cardIndex == 0 ? camera1Card_ : camera2Card_;
+		if (next != cameraAssignments_[cardIndex]) {
+			cameraAssignments_[cardIndex] = next;
+			card->setRuntime(*runtimes_[next], next + 1);
+			changed = true;
+		}
+		card->setEnabled(runtimes_[next]->isEnabled());
+	}
+	if (changed) bindZoomObservers();
+}
+
 void CameraControlDock::selectCameraForCard(int cardIndex, int cameraIndex)
 {
-	if (cardIndex < 0 || cardIndex > 1 || cameraIndex < 0 || cameraIndex >= CameraSlotCount || !runtimes_[cameraIndex])
+	if (cardIndex < 0 || cardIndex > 1 || cameraIndex < 0 || cameraIndex >= CameraSlotCount || !runtimes_[cameraIndex] || !runtimes_[cameraIndex]->isEnabled())
 		return;
 	const int otherCard = 1 - cardIndex;
 	if (cameraAssignments_[cardIndex] == cameraIndex)
@@ -2221,6 +2520,9 @@ CamerasTool::CamerasTool(const CameraRuntimeArray &runtimes, const QString &buil
 	profileRowLayout->addWidget(profileSelector_, 1);
 	profileRowLayout->addWidget(refreshProfilesButton);
 	form->addRow(QStringLiteral("Camera"), cameraSelector_);
+	cameraEnabled_ = new QCheckBox(QStringLiteral("Enabled"), this);
+	cameraEnabled_->setToolTip(QStringLiteral("Show this slot in the controls and allow camera commands. Settings and presets are retained when disabled."));
+	form->addRow(QStringLiteral("Camera slot"), cameraEnabled_);
 	form->addRow(QStringLiteral("Raw camera feed"), feedSourceRow);
 	form->addRow(QStringLiteral("Camera profile"), profileRow);
 	form->addRow(QStringLiteral("Camera name"), cameraNameEdit_);
@@ -2237,6 +2539,14 @@ CamerasTool::CamerasTool(const CameraRuntimeArray &runtimes, const QString &buil
 	root->addWidget(statusLabel_);
 	root->addStretch(1);
 
+	QObject::connect(cameraEnabled_, &QCheckBox::toggled, this, [this](bool enabled) {
+		CameraRuntime &selected = *runtimes_[cameraSelector_->currentIndex()];
+		selected.setEnabled(enabled);
+		statusLabel_->setText(QStringLiteral("%1 %2; settings and presets retained")
+			.arg(selected.cameraName(), enabled ? QStringLiteral("enabled") : QStringLiteral("disabled")));
+		if (refreshControls_) refreshControls_();
+		refreshPresetSourceNames();
+	});
 	QObject::connect(cameraSelector_, qOverload<int>(&QComboBox::currentIndexChanged), this,
 			 [this](int) { loadSelectedCamera(); });
 	QObject::connect(profileSelector_, qOverload<int>(&QComboBox::currentIndexChanged), this,
@@ -2358,6 +2668,8 @@ void CamerasTool::loadSelectedCamera()
 	if (!cameraSelector_ || cameraSelector_->currentIndex() < 0)
 		return;
 	CameraRuntime &selected = *runtimes_[cameraSelector_->currentIndex()];
+	const QSignalBlocker blockEnabled(cameraEnabled_);
+	cameraEnabled_->setChecked(selected.isEnabled());
 	const QSignalBlocker blockPort(portSpin_);
 	const QSignalBlocker blockAddress(addressSpin_);
 	const QSignalBlocker blockProfile(profileSelector_);

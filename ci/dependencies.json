@@ -1,0 +1,19 @@
+{
+  "obs": {
+    "version": "32.2.1",
+    "url": "https://github.com/obsproject/obs-studio/releases/download/32.2.1/OBS-Studio-32.2.1-Sources.tar.gz",
+    "sha256": "6a2532b1094bc51bc2fdeb1068d5c19cfe04216191a5b35c8707625401a80bf4"
+  },
+  "macos": [
+    {
+      "name": "prebuilt",
+      "url": "https://github.com/obsproject/obs-deps/releases/download/2026-07-15/macos-deps-2026-07-15-arm64.tar.xz",
+      "sha256": "52805d9ccb2417aee124551a36d988d96129afafb6114a2e0512e6d0af546020"
+    },
+    {
+      "name": "qt6",
+      "url": "https://github.com/obsproject/obs-deps/releases/download/2026-07-15/macos-deps-qt6-2026-07-15-arm64.tar.xz",
+      "sha256": "184538177d854664c56e8524e1afb2b6156083579426f3193e90c6cf4d514583"
+    }
+  ]
+}

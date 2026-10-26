@@ -201,6 +201,7 @@ bool obs_module_load(void)
 
 void obs_module_unload(void)
 {
+	simplecam::shutdownPresetSourceUi();
 	obs_frontend_remove_event_callback(onFrontendEvent, nullptr);
 	// The timer is parented to the control dock. OBS may already have destroyed
 	// that dock during shutdown, so let QObject ownership destroy the timer and

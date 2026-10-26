@@ -33,3 +33,12 @@ The full user guide should be written against the implemented UI, not guessed in
 ## Current limitation
 
 This is an outline, not a release-ready user manual. The final text depends on the new project's camera configuration UI, profile directories, install method, and source migration decision.
+
+## Current r13 operator changes
+
+Document the implemented controls in PRODUCTION_REVISIONS_R13.md after Windows
+acceptance: plain source labels/names, compact Properties, light-red on-air vs
+muted-blue selected camera, inline Rename with Enter/Escape, post-recall zoom
+inquiry, independent camera queues, and Ctrl+Clear for selected-camera/group
+labels only. Physical camera memory is not erased by Clear. Do not describe
+Ctrl+Clear as clearing all cameras.

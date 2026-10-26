@@ -67,9 +67,13 @@ function(set_target_properties_plugin target)
   install(TARGETS ${target} LIBRARY DESTINATION .)
   install(FILES "$<TARGET_BUNDLE_DIR:${target}>.dsym" CONFIGURATIONS Release DESTINATION . OPTIONAL)
 
+  # CI creates an architecture-specific installer from the actual target bundle.
+  # Keep the older template package step available for existing local builds.
+  if(NOT SIMPLECAM_SKIP_AUTO_PACKAGE)
   configure_file(cmake/macos/resources/distribution.in "${CMAKE_CURRENT_BINARY_DIR}/distribution" @ONLY)
   configure_file(cmake/macos/resources/create-package.cmake.in "${CMAKE_CURRENT_BINARY_DIR}/create-package.cmake" @ONLY)
   install(SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/create-package.cmake")
+  endif()
 endfunction()
 
 # target_install_resources: Helper function to add resources into bundle

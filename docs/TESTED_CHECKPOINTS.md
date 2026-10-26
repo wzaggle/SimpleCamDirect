@@ -53,3 +53,20 @@ The old manual Single/Dual toolbar, forced dual-width Settings, fixed 34px prese
 
 - The checkpoint does not claim dual physical-camera hardware validation or support for protocols beyond the existing VISCA/TCP path.
 - Serial, ONVIF, NDI, and camera profile editing remain future work.
+
+## 2026-10-26 — r12–r14 production follow-up and cloud setup
+
+- Maintainer confirmed camera Enabled checkbox and recovered independent preset
+  names working after importing labels/maps from the production Qt registry
+  export into production INIs. Those user settings are not repository content.
+- r13 adds plain source labels/names, red on-air accents, stronger selected blue,
+  inline renaming, local Ctrl+Clear, longer recall completion bounds and final
+  zoom inquiries/caches. Individual new behaviors still require their operator
+  acceptance checks; do not infer every pass from a successful build.
+- r14 compact Properties passed maintainer testing. The supplied log showed
+  720x464 initially, an accepted 720x280 resize, stable through 1500ms, and final
+  minimum height 256px. Keep 280px. The key fix is deferred field identification
+  after OBS's queued ReloadProperties, not a dock geometry change.
+- Cloud setup removes that temporary Properties tracing and adds native build
+  orchestration. Platform build results and first M1/Ubuntu OBS load remain
+  separate gates. See CLOUD_BUILDS.md for exact operation and limitations.

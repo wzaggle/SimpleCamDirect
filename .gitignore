@@ -26,3 +26,14 @@
 # OS metadata
 .DS_Store
 Thumbs.db
+
+# Cloud build staging and downloaded packages
+/.ci-sdk/
+/.ci-downloads/
+/packages/
+/package-macos/
+/package-linux/
+/stage-macos/
+/installers/
+__pycache__/
+*.pyc

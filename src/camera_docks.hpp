@@ -54,6 +54,10 @@ private:
 	void sendStopPanTilt();
 	void sendZoomPosition();
 	void updateCameraTitleStyle();
+	void beginPresetRename(int slotIndex);
+	void finishPresetRename(bool commit);
+	void clearCurrentGroup();
+	bool eventFilter(QObject *watched, QEvent *event) override;
 
 	CameraRuntime *runtime_ = nullptr;
 	QWidget *cameraHeaderWidget_ = nullptr;
@@ -79,6 +83,10 @@ private:
 	QWidget *cameraSelectorWidget_ = nullptr;
 	QPushButton *cameraSelectButtons_[CameraSlotCount] = {};
 	QVector<QPushButton *> presetButtons_;
+	QLineEdit *presetNameEditor_ = nullptr;
+	QPointer<CameraRuntime> renameRuntime_;
+	int renamePage_ = -1;
+	int renameSlot_ = -1;
 	QPushButton *setButton_ = nullptr;
 	QPushButton *renameButton_ = nullptr;
 	QPushButton *swapButton_ = nullptr;
@@ -116,6 +124,8 @@ public:
 
 private:
 	void selectCameraForCard(int cardIndex, int cameraIndex);
+	void normalizeCameraAssignments();
+	int enabledCameraCount() const;
 	void refreshOnAirCamera();
 	void updateSharedGroupIndicator();
 	void positionSharedGroupIndicator();
@@ -124,6 +134,7 @@ private:
 	void updatePresetRowHeight();
 	void bindFloatingDock();
 	void moveSettingsGear();
+	void logProductionUiDiagnostics(const char *phase) const;
 	void updateFloatingLimits();
 	void showEvent(QShowEvent *event) override;
 	void logLayoutDiagnostics(const char *phase, int transition, int resizeRequest) const;
@@ -138,6 +149,7 @@ private:
 	QPointer<QDockWidget> floatingDock_;
 	QMetaObject::Connection floatingConnection_;
 	int fullControlHeight_ = 0;
+	QTimer *productionDiagTimer_ = nullptr;
 	QPushButton *settingsButton_ = nullptr;
 	bool settingsMode_ = false;
 	int settingsWidth_ = 0;
@@ -167,6 +179,7 @@ private:
 
 	CameraRuntimeArray runtimes_{};
 	QComboBox *cameraSelector_ = nullptr;
+	QCheckBox *cameraEnabled_ = nullptr;
 	QComboBox *profileSelector_ = nullptr;
 	QComboBox *cameraFeedSourceSelector_ = nullptr;
 	QLineEdit *cameraNameEdit_ = nullptr;

@@ -77,3 +77,11 @@ floating-only size limits, rightmost black Settings gear, and yellow on-air
 camera titles. This supersedes earlier fixed-size layout descriptions.
 Windows/OBS passes are maintainer-reported; this editing environment did not
 run Windows builds. Product version remains 0.1.0.
+
+## Windows, Apple Silicon macOS and Ubuntu cloud packages
+
+See [docs/CLOUD_BUILDS.md](docs/CLOUD_BUILDS.md). The **Build All Platforms**
+GitHub Actions workflow packages one exact commit into Windows/macOS/Linux
+folders after native builds and automated tests. It does not deploy production
+or publish a release. Local Windows Install is unchanged. Mac and Linux need
+separate OBS/runtime acceptance tests; CI is not a hardware support claim.

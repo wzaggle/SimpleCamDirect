@@ -177,3 +177,18 @@ Run from a safe position; record each independently:
 ## Minimal release evidence
 
 For each supported platform, report separate results for: configure/build, plugin load, profile validation, simulated/protocol fixture test, manual UI control, scene-source trigger behavior, serial (if supported), and real hardware. A platform is not “supported” based only on a successful compile.
+
+## r13 production revision gate (2026-10-26)
+
+See [PRODUCTION_REVISIONS_R13.md](PRODUCTION_REVISIONS_R13.md) for the full
+operator checklist. Windows compile/OBS/camera results remain pending.
+
+- [ ] Simple source labels with a current locale, and readable fallback with the older locale.
+- [ ] No italic/bold tags in source names; referenced-source orange/* cue retained.
+- [ ] Compact SimpleCam Properties, no clipping; other source dialogs unaffected; clean shutdown.
+- [ ] Light-red on-air cues, muted-blue selection, accepted responsive/floating geometry retained.
+- [ ] Inline rename Enter/Escape, refresh, camera/group switching and resize behavior.
+- [ ] Two physical cameras move concurrently; same-camera recall/query order retained.
+- [ ] Slider follows post-completion zoom and camera reassignment without feedback moves.
+- [ ] Ctrl+Clear cancel/accept scope, retained physical maps, global page deletion guard.
+- [ ] Recovered camera-specific names persist unchanged except deliberate edits.

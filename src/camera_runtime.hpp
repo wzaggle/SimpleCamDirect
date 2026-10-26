@@ -39,6 +39,9 @@ public:
 
 	PresetCatalog(QSettings &settings, int capacity);
 
+	~PresetCatalog();
+	void shareGroupsWith(PresetCatalog &owner, bool migrateLegacySlots);
+	bool canRemovePage(int pageIndex) const;
 	int pageCount() const;
 	int maxPageCount() const;
 	int capacity() const;
@@ -52,6 +55,7 @@ public:
 	bool removePageIfBlank(int pageIndex);
 	bool setLabel(int pageIndex, int slotIndex, const QString &label);
 	bool clearLabel(int pageIndex, int slotIndex);
+	bool clearPageLabels(int pageIndex);
 	bool swapSlots(int pageA, int slotA, int pageB, int slotB);
 	int allocatePhysicalPreset(int pageIndex, int slotIndex, int allowedCapacity = 0);
 
@@ -59,6 +63,9 @@ private:
 	bool validSlot(int pageIndex, int slotIndex) const;
 	void load();
 	void save() const;
+	void synchronizeGroups();
+	PresetCatalog *groupOwner_ = nullptr;
+	QVector<PresetCatalog *> groupMembers_;
 
 	QSettings &settings_;
 	QVector<PresetPage> pages_;
@@ -73,10 +80,12 @@ public:
 		QByteArray bytes;
 		bool waitForCompletion = false;
 		std::function<void(const QByteArray &)> onReply;
+		int completionTimeoutMs = 2500;
 	};
 
 	explicit ViscaTcpTransport(QObject *parent = nullptr);
 
+	void setEnabled(bool enabled);
 	void setEndpoint(const QString &host, quint16 port, int cameraAddress);
 	void enqueue(const QVector<FrameCommand> &commands, Completion completion = {}, int delayBeforeMs = 0);
 	void testConnection(Completion completion);
@@ -107,6 +116,8 @@ private:
 	QTimer timeout_;
 	QByteArray inputBuffer_;
 	bool busy_ = false;
+	bool enabled_ = true;
+	unsigned long long requestGeneration_ = 0;
 };
 
 class CameraRuntime final : public QObject {
@@ -121,6 +132,8 @@ public:
 	explicit CameraRuntime(const QString &settingsPath, const QString &defaultName = QStringLiteral("Camera 1"),
 			const QString &defaultProfilePath = {}, QObject *parent = nullptr);
 
+	bool isEnabled() const;
+	void setEnabled(bool enabled);
 	QString cameraName() const;
 	QString cameraFeedSourceUuid() const;
 	QString host() const;
@@ -168,6 +181,7 @@ public:
 	void setPresetRecallObserver(PresetRecallObserver observer);
 	void setPresetRecallResultObserver(PresetRecallResultObserver observer);
 	void setZoomPositionObserver(ZoomPositionObserver observer);
+	int lastZoomSliderValue() const;
 
 private:
 	ViscaTemplateValues templateValues(int physicalPreset = 1, int panSpeed = 8, int tiltSpeed = 8,
@@ -184,6 +198,7 @@ private:
 	int resolvePhysicalPreset(int pageIndex, int slotIndex) const;
 
 	QSettings settings_;
+	bool enabled_ = true;
 	QString profilePath_;
 	CameraProfileDocument profile_;
 	QString profileLoadError_;
@@ -197,6 +212,7 @@ private:
 	PresetRecallObserver presetRecallObserver_;
 	PresetRecallResultObserver presetRecallResultObserver_;
 	ZoomPositionObserver zoomPositionObserver_;
+	int lastZoomSliderValue_ = -1;
 	PresetCatalog presets_;
 	CameraRuntime *sharedPresetOwner_ = nullptr;
 	ViscaTcpTransport transport_;

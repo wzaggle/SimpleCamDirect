@@ -98,3 +98,29 @@ For the current Denver Windows workflow, ZIP entries need America/Denver
 local timestamps; ZIP timestamps have no time-zone metadata. Older timestamps
 can silently skip MSBuild recompilation. Do not treat Install success alone
 as evidence that changed camera_docks.cpp compiled or that OBS loaded it.
+
+## Production revisions (2026-10-26, r13; awaiting Windows validation)
+
+Read docs/PRODUCTION_REVISIONS_R13.md for current behavior and evidence.
+On-air accents are now light red, selected camera squares muted blue; yellow
+continues to mean a preset-action flash. Keep source labels readable when an
+older locale is installed. Inline renaming is a child overlay, never a layout
+row. Ctrl+Clear only blanks the selected camera/group labels after confirmation.
+Do not overwrite the recovered per-camera catalogs or rerun a legacy import.
+Recall completion precedes zoom inquiry in that camera's asynchronous queue;
+other camera queues proceed independently. The source-specific Properties
+adapter must never resize unrelated host dialogs or depend on private OBS ABI.
+
+## Cloud build setup (2026-10-26)
+
+Read docs/CLOUD_BUILDS.md before changing workflow/dependencies/packaging.
+Build All Platforms runs native Windows x64, macOS arm64 and Ubuntu 24.04 x64
+jobs for one source SHA, with tests before packaging and a verified combined
+artifact. Seven-day retention and native job timeouts bound usage. Preserve
+local Windows Install. Ordinary source commits do not trigger three builds;
+CI infrastructure edits do. Never upload production INIs/registry exports.
+Mac is ad-hoc signed for testing, not notarized; Linux targets native OBS,
+not Flatpak/Snap. A successful CI build does not prove OBS load/camera behavior.
+The current Properties adapter retains the r14 deferred probe/280px baseline
+but removes its temporary geometry logs. Do not restore the Show-time-only
+identification check: OBS queues its property field construction.
