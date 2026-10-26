@@ -612,6 +612,21 @@ CameraRuntime::CameraRuntime(const QString &settingsPath, const QString &default
 	}
 	transport_.setEndpoint(host_, port_, cameraAddress_);
 	transport_.setEnabled(enabled_);
+	zoomInitializationTimer_.setSingleShot(true);
+	zoomInitializationTimer_.setInterval(0);
+	QObject::connect(&zoomInitializationTimer_, &QTimer::timeout, this, [this]() {
+		if (!enabled_ || host_.isEmpty() || port_ == 0)
+			return;
+		const quint64 generation = zoomConfigurationGeneration_;
+		queryZoomPosition([this, generation](bool ok, const QString &message) {
+			if (!enabled_ || generation != zoomConfigurationGeneration_)
+				return;
+			if (ok)
+				obs_log(LOG_INFO, "[SimpleCamPTZ ZoomInit] build=r18 initialized slider=%d", lastZoomSliderValue_);
+			else
+				obs_log(LOG_WARNING, "[SimpleCamPTZ ZoomInit] build=r18 initialization failed: %s", message.toUtf8().constData());
+		});
+	});
 	writeCameraSettings();
 }
 
@@ -623,6 +638,7 @@ void CameraRuntime::setEnabled(bool enabled)
 	enabled_ = enabled;
 	transport_.setEnabled(enabled);
 	writeCameraSettings();
+	scheduleZoomInitialization();
 }
 
 QString CameraRuntime::cameraName() const
@@ -717,23 +733,31 @@ void CameraRuntime::setCameraFeedSourceUuid(const QString &uuid)
 
 void CameraRuntime::setHost(const QString &host)
 {
-	host_ = host.trimmed();
+	const QString clean = host.trimmed();
+	if (host_ == clean) return;
+	host_ = clean;
 	transport_.setEndpoint(host_, port_, cameraAddress_);
 	writeCameraSettings();
+	scheduleZoomInitialization();
 }
 
 void CameraRuntime::setPort(quint16 port)
 {
+	if (port_ == port) return;
 	port_ = port;
 	transport_.setEndpoint(host_, port_, cameraAddress_);
 	writeCameraSettings();
+	scheduleZoomInitialization();
 }
 
 void CameraRuntime::setCameraAddress(int address)
 {
-	cameraAddress_ = std::clamp(address, 1, 7);
+	const int clean = std::clamp(address, 1, 7);
+	if (cameraAddress_ == clean) return;
+	cameraAddress_ = clean;
 	transport_.setEndpoint(host_, port_, cameraAddress_);
 	writeCameraSettings();
+	scheduleZoomInitialization();
 }
 
 bool CameraRuntime::setProfilePath(const QString &path, QString *error)
@@ -761,6 +785,7 @@ bool CameraRuntime::setProfilePath(const QString &path, QString *error)
 	profileLoadError_.clear();
 	capacity_ = candidateCapacity;
 	writeCameraSettings();
+	scheduleZoomInitialization();
 	return true;
 }
 
@@ -1040,6 +1065,54 @@ void CameraRuntime::sendProfileCommand(const QString &commandId, const ViscaTemp
 	transport_.enqueue(commands, std::move(completion), delayBeforeMs);
 }
 
+void CameraRuntime::initializeZoomPosition()
+{
+	if (zoomInitializationStarted_)
+		return;
+	zoomInitializationStarted_ = true;
+	scheduleZoomInitialization();
+}
+
+void CameraRuntime::scheduleZoomInitialization()
+{
+	++zoomConfigurationGeneration_;
+	lastZoomSliderValue_ = -1;
+	// Coalesce configuration setters in the same event-loop turn. No network
+	// work runs in a constructor, and the timer is not a periodic poll/retry.
+	if (zoomInitializationStarted_)
+		zoomInitializationTimer_.start();
+}
+
+void CameraRuntime::queryZoomPosition(Completion completion)
+{
+	QVector<QByteArray> packets;
+	QString error;
+	if (!renderCommandPackets(QStringLiteral("zoomInquiry"), templateValues(), &packets, &error) || packets.isEmpty()) {
+		if (completion) completion(false, error.isEmpty() ? QStringLiteral("Profile has no zoom inquiry") : error);
+		return;
+	}
+	const quint64 generation = zoomConfigurationGeneration_;
+	auto accepted = std::make_shared<bool>(false);
+	QVector<ViscaTcpTransport::FrameCommand> commands;
+	for (const QByteArray &packet : packets) {
+		ViscaTcpTransport::FrameCommand inquiry{packet, true};
+		inquiry.onReply = [this, generation, accepted](const QByteArray &reply) {
+			if (enabled_ && generation == zoomConfigurationGeneration_)
+				*accepted = handleZoomInquiryReply(reply) || *accepted;
+		};
+		commands.append(std::move(inquiry));
+	}
+	transport_.enqueue(commands, [this, generation, accepted, completion = std::move(completion)](bool ok, const QString &message) {
+		if (!completion) return;
+		if (generation != zoomConfigurationGeneration_)
+			completion(false, QStringLiteral("Camera configuration changed during zoom inquiry"));
+		else if (ok && !*accepted)
+			completion(false, QStringLiteral("Camera did not return a valid zoom position"));
+		else
+			completion(ok, message);
+	});
+}
+
 void CameraRuntime::appendZoomInquiry(QVector<ViscaTcpTransport::FrameCommand> &commands)
 {
 	QVector<QByteArray> inquiryPackets;
@@ -1047,7 +1120,11 @@ void CameraRuntime::appendZoomInquiry(QVector<ViscaTcpTransport::FrameCommand> &
 		return;
 	for (const QByteArray &packet : inquiryPackets) {
 		ViscaTcpTransport::FrameCommand inquiry{packet, true};
-		inquiry.onReply = [this](const QByteArray &reply) { handleZoomInquiryReply(reply); };
+		const quint64 generation = zoomConfigurationGeneration_;
+		inquiry.onReply = [this, generation](const QByteArray &reply) {
+			if (enabled_ && generation == zoomConfigurationGeneration_)
+				handleZoomInquiryReply(reply);
+		};
 		commands.append(std::move(inquiry));
 	}
 }
@@ -1076,16 +1153,16 @@ void CameraRuntime::sendPresetRecallAndZoomInquiry(int physicalPreset, int delay
 	transport_.enqueue(commands, std::move(completion), delayMs);
 }
 
-void CameraRuntime::handleZoomInquiryReply(const QByteArray &reply)
+bool CameraRuntime::handleZoomInquiryReply(const QByteArray &reply)
 {
 	if (reply.size() < 7 || (static_cast<quint8>(reply.at(1)) & 0xF0) != 0x50 ||
 	    static_cast<quint8>(reply.at(reply.size() - 1)) != 0xFF)
-		return;
+		return false;
 	int nativePosition = 0;
 	for (int index = 2; index <= 5; ++index) {
 		const quint8 value = static_cast<quint8>(reply.at(index));
 		if ((value & 0xF0) != 0)
-			return;
+			return false;
 		nativePosition = (nativePosition << 4) | (value & 0x0F);
 	}
 	const int calibratedMaximum = profile_.nativeZoomMaximum();
@@ -1094,6 +1171,7 @@ void CameraRuntime::handleZoomInquiryReply(const QByteArray &reply)
 	lastZoomSliderValue_ = sliderValue;
 	if (zoomPositionObserver_)
 		zoomPositionObserver_(sliderValue);
+	return true;
 }
 
 void CameraRuntime::writeCameraSettings()

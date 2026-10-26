@@ -111,6 +111,10 @@ void onFrontendEvent(enum obs_frontend_event event, void *)
 		if (scene)
 			obs_source_release(scene);
 	} else if (event == OBS_FRONTEND_EVENT_FINISHED_LOADING) {
+		// Defer read-only inquiries until profiles, endpoints and UI observers
+		// are ready. Each camera uses its own existing asynchronous queue.
+		for (simplecam::CameraRuntime *runtime : runtimes)
+			runtime->initializeZoomPosition();
 #ifdef Q_OS_MACOS
 		simplecam::finishMacDockStartup();
 #endif

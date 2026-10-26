@@ -33,3 +33,10 @@
   Verify real user-domain installation and signed binary identity in CI.
 - Add native platform choice; scope this infrastructure validation push to Mac.
 - No Intel build or permanent Mac docking success is claimed at this checkpoint.
+
+## 2026-10-26 — r18 startup zoom initialization
+
+- Validate the shared runtime on all three native platforms again.
+- Extend the existing concurrency suite with startup inquiries and guarded
+  refresh after camera enable/connection/profile changes. Local 34 checks pass.
+- Preserve r17 Mac user-domain installation checks and the platform selector.

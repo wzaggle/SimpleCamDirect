@@ -36,9 +36,10 @@ struct FakeCamera : QTcpServer {
                         if (onRecall) onRecall();
                     } else if (frame == QByteArray::fromHex("81090447ff")) {
                         ++inquiries;
-                        client->write(QByteArray::fromHex("905002000000ff")); // position 0x2000
-                        client->flush();
+                        if (holdInquiries) pendingInquiries.append(client);
+                        else { client->write(zoomReply); client->flush(); }
                     } else {
+                        ++otherCommands;
                         client->write(QByteArray::fromHex("906002ff"));
                         client->flush();
                     }
@@ -54,6 +55,18 @@ struct FakeCamera : QTcpServer {
             held = nullptr;
         }
     }
+    void completeInquiries()
+    {
+        const auto pending = pendingInquiries;
+        pendingInquiries.clear();
+        for (const auto &client : pending) {
+            if (client) { client->write(zoomReply); client->flush(); }
+        }
+    }
+    QByteArray zoomReply = QByteArray::fromHex("905002000000ff");
+    bool holdInquiries = false;
+    QVector<QPointer<QTcpSocket>> pendingInquiries;
+    int otherCommands = 0;
     QPointer<QTcpSocket> held;
     QVector<QByteArray> recalls;
     int inquiries = 0;
@@ -126,6 +139,74 @@ int main(int argc, char **argv)
     check(a.lastZoomSliderValue() == aZoom && b.lastZoomSliderValue() == bZoom, "per-camera zoom cache matches replies");
     if (!serverA.recalls.isEmpty())
         check(serverA.recalls.first() == QByteArray::fromHex("8101043f020eff"), "shared group two resolves to wire preset fourteen");
+    // Startup queries are explicit (constructors stay quiet), read-only and
+    // independent per camera. Hold C's reply to prove D can initialize first.
+    {
+        FakeCamera serverC, serverD;
+        serverC.zoomReply = QByteArray::fromHex("905001000000ff");
+        serverD.zoomReply = QByteArray::fromHex("905003000000ff");
+        serverC.holdInquiries = true;
+        const QString cPath = temp.filePath("startup-c.ini");
+        const QString dPath = temp.filePath("startup-d.ini");
+        const QString ePath = temp.filePath("startup-disabled.ini");
+        for (const QString &path : {cPath, dPath, ePath}) {
+            QSettings config(path, QSettings::IniFormat);
+            config.setValue("camera/host", "127.0.0.1");
+            config.setValue("camera/port", path == dPath ? serverD.serverPort() : serverC.serverPort());
+            config.setValue("camera/enabled", path != ePath);
+        }
+        simplecam::CameraRuntime c(cPath, "C", QString::fromLocal8Bit(argv[1]));
+        simplecam::CameraRuntime d(dPath, "D", QString::fromLocal8Bit(argv[1]));
+        simplecam::CameraRuntime e(ePath, "E", QString::fromLocal8Bit(argv[1]));
+        QVector<int> cUpdates;
+        c.setZoomPositionObserver([&](int value) { cUpdates.append(value); });
+        auto until = [&](const std::function<bool()> &condition) {
+            if (condition()) return true;
+            QEventLoop waiting;
+            QTimer poll, deadline;
+            QObject::connect(&poll, &QTimer::timeout, &waiting, [&]() { if (condition()) waiting.quit(); });
+            deadline.setSingleShot(true);
+            QObject::connect(&deadline, &QTimer::timeout, &waiting, &QEventLoop::quit);
+            poll.start(2); deadline.start(1500); waiting.exec();
+            return condition();
+        };
+        check(c.lastZoomSliderValue() == -1 && d.lastZoomSliderValue() == -1, "startup cache initially unknown");
+        c.initializeZoomPosition(); c.initializeZoomPosition();
+        d.initializeZoomPosition(); e.initializeZoomPosition();
+        check(until([&]() { return serverC.inquiries == 1 && d.lastZoomSliderValue() == 150; }),
+              "second camera initializes while first camera reply is held");
+        check(c.lastZoomSliderValue() == -1, "held startup reply cannot invent a position");
+        check(serverC.inquiries == 1, "startup is idempotent and disabled slot sends no inquiry");
+        serverC.completeInquiries();
+        check(until([&]() { return c.lastZoomSliderValue() == 50; }), "startup reply populates first camera cache");
+        check(cUpdates == QVector<int>{50}, "startup notifies slider observer once");
+
+        QString profileError;
+        check(c.setProfilePath(QString::fromLocal8Bit(argv[1]), &profileError), "profile reload accepted");
+        check(until([&]() { return serverC.inquiries == 2; }), "profile change refreshes camera zoom");
+        const int beforeChange = cUpdates.size();
+        c.setPort(serverD.serverPort());
+        check(c.lastZoomSliderValue() == -1, "endpoint change invalidates old cache");
+        serverC.completeInquiries();
+        check(until([&]() { return c.lastZoomSliderValue() == 150; }), "changed endpoint supplies new zoom");
+        check(cUpdates.size() == beforeChange + 1 && cUpdates.last() == 150, "late old-endpoint reply is ignored");
+        check(serverD.inquiries == 2, "endpoint change coalesces to one new inquiry");
+
+        e.setEnabled(true);
+        check(until([&]() { return serverC.inquiries == 3; }), "enabling initialized slot queries its camera");
+        serverC.completeInquiries();
+        check(until([&]() { return e.lastZoomSliderValue() == 50; }), "enabled slot receives current position");
+
+        serverD.zoomReply = QByteArray::fromHex("906041ff");
+        c.setProfilePath(QString::fromLocal8Bit(argv[1]), &profileError);
+        check(until([&]() { return serverD.inquiries == 3; }), "camera rejection test inquiry sent");
+        serverD.zoomReply = QByteArray::fromHex("905003000000ff");
+        c.setProfilePath(QString::fromLocal8Bit(argv[1]), &profileError);
+        check(until([&]() { return c.lastZoomSliderValue() == 150; }), "queue recovers after failed initialization");
+        check(c.isEnabled() && c.canSetZoomPosition(), "query failure leaves camera controls available");
+        check(serverC.recalls.isEmpty() && serverD.recalls.isEmpty() && serverC.otherCommands == 0 && serverD.otherCommands == 0,
+              "initialization and refresh only send inquiries, never movement");
+    }
     std::cout << checks << " checks, " << failures << " failures\n";
     return failures ? 1 : 0;
 }

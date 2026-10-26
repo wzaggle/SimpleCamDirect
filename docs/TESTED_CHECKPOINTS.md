@@ -103,3 +103,11 @@ created the home-domain PKG, actually installed it under /Users/runner/Library/
 Application Support/obs-studio/plugins, compared binaries and verified signing.
 Windows/Linux were deliberately not scheduled. M1 dock/undock and camera checks
 remain pending. See MAC_DOCK_R17.md for controls, evidence and operator steps.
+
+## 2026-10-26 — M1 r17 operator follow-up
+
+The maintainer confirmed the control dock now docks and undocks with the normal
+Mac title bar; the optional Qt title bar was not enabled. The OBS main window
+is slightly too tall for the screen. Native-title-bar versus floating-constraint
+causation is not isolated; retain r17 behavior for now and investigate height
+separately. r18 adds only the requested startup zoom initialization.

@@ -183,6 +183,7 @@ public:
 	void setPresetRecallResultObserver(PresetRecallResultObserver observer);
 	void setZoomPositionObserver(ZoomPositionObserver observer);
 	int lastZoomSliderValue() const;
+	void initializeZoomPosition();
 
 private:
 	ViscaTemplateValues templateValues(int physicalPreset = 1, int panSpeed = 8, int tiltSpeed = 8,
@@ -194,7 +195,9 @@ private:
 				Completion completion, int delayBeforeMs = 0);
 	void appendZoomInquiry(QVector<ViscaTcpTransport::FrameCommand> &commands);
 	void sendPresetRecallAndZoomInquiry(int physicalPreset, int delayMs, Completion completion);
-	void handleZoomInquiryReply(const QByteArray &reply);
+	bool handleZoomInquiryReply(const QByteArray &reply);
+	void scheduleZoomInitialization();
+	void queryZoomPosition(Completion completion);
 	void writeCameraSettings();
 	int resolvePhysicalPreset(int pageIndex, int slotIndex) const;
 
@@ -214,6 +217,9 @@ private:
 	PresetRecallResultObserver presetRecallResultObserver_;
 	ZoomPositionObserver zoomPositionObserver_;
 	int lastZoomSliderValue_ = -1;
+	bool zoomInitializationStarted_ = false;
+	quint64 zoomConfigurationGeneration_ = 0;
+	QTimer zoomInitializationTimer_;
 	PresetCatalog presets_;
 	CameraRuntime *sharedPresetOwner_ = nullptr;
 	ViscaTcpTransport transport_;

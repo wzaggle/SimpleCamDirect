@@ -203,3 +203,14 @@ operator checklist. Windows compile/OBS/camera results remain pending.
 - [ ] Camera/source behavior retains r16 results.
 
 See MAC_DOCK_R17.md. Intel OBS-load/hardware checks remain separate.
+
+## r18 startup query gate
+
+- [ ] Slider initializes from an actual camera reply before any manual movement.
+- [ ] Hidden camera cards receive their own cached queried positions.
+- [ ] Disabled/unconfigured slots send no startup inquiry; enabling refreshes.
+- [ ] Profile/connection changes ignore stale replies and query the new state.
+- [ ] Unreachable cameras do not block other cameras or disable controls.
+- [ ] Query updates never send zoom movement or power-on commands.
+
+See STARTUP_ZOOM_R18.md for simulated and native-build evidence.

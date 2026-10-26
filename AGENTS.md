@@ -151,3 +151,13 @@ and be installed/verified by CI before delivery. Preserve production INIs.
 Manual Actions platform selection includes all/macos/windows/linux. Automatic
 CI infrastructure pushes currently use ci/push-platform.txt (macos); restore all
 for shared infrastructure work. Intel support remains a separate upcoming gate.
+
+## Startup zoom state (2026-10-26, r18)
+
+Startup/profile/endpoint refresh uses only the selected profile's zoomInquiry,
+queued independently per camera after OBS FINISHED_LOADING. Preserve the
+per-camera cache, generation guards and signal-blocked UI updates. Initialization
+never moves/recalls/powers on a camera and does not disable controls on failure.
+The constructor remains free of network activity; setters coalesce refreshes
+only after startup initialization is enabled. See STARTUP_ZOOM_R18.md.
+Shared-runtime validation uses all platforms again. Mac geometry is not changed.
