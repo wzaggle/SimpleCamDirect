@@ -105,7 +105,23 @@ No camera setting INIs, recovered labels or Windows registry contents are shippe
 
 ## Evidence
 
-Local source/JSON/YAML checks and Python syntax checks are recorded during setup.
-Cloud build results must be read from the actual Actions run, not inferred from
-valid workflow syntax. Initial Windows/Mac/Linux build and test results are
-pending until that run completes. OBS runtime/hardware checks remain manual.
+Native cloud validation completed successfully on 2026-10-26 for source
+`e0963690927afaea393f9aa985bbd9a6482e5a34`:
+
+- Windows x64: plugin compile, four automated suites and EXE installer passed.
+- macOS arm64: plugin compile, four suites, ad-hoc signature verification,
+  arm64 architecture check, tar archive and PKG creation passed.
+- Ubuntu 24.04 x64: plugin compile, four suites and DEB creation passed.
+- Collector verified all three BUILD-INFO files use that exact revision and
+  report automated tests passed, then created the combined artifact.
+
+[Successful run](https://github.com/wzaggle/SimpleCamDirect/actions/runs/40365409463)
+
+[Combined Windows/macOS/Linux ZIP](https://github.com/wzaggle/SimpleCamDirect/actions/runs/40365409463/artifacts/12670800797)
+
+Artifacts expire after seven days (this run: 2026-11-02); download them for
+local retention. The macOS folder contains
+`SimpleCamPTZ-Setup-0.1.0-macOS-arm64.pkg` and a portable tar.gz alternative.
+The M1 OBS-load, modifier behavior and real-camera checks remain manual and
+unverified. The package is ad-hoc signed for testing, not notarized. These build
+results do not establish Mac/Linux runtime or camera compatibility.

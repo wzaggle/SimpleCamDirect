@@ -84,3 +84,12 @@ The old manual Single/Dual toolbar, forced dual-width Settings, fixed 34px prese
 - Prior cloud run 40358713833 compiled all platforms and passed all four suites
   on each. Mac packaging alone failed because lipo arguments were in the wrong
   order. Correct the packaging invocation and produce one same-revision set.
+
+### Same-revision native cloud packages
+
+Run 40365409463 completed successfully for e0963690927afaea393f9aa985bbd9a6482e5a34.
+Windows x64, macOS arm64 and Ubuntu 24.04 x64 each compiled and passed four
+automated suites (12 suite executions total). All installers were created,
+and the collector checked the revision and test result of each OS package.
+Mac ad-hoc signing and arm64 verification passed. M1 OBS-load, Mac modifier
+behavior and physical-camera acceptance remain pending. See CLOUD_BUILDS.md.
