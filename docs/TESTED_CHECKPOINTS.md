@@ -93,3 +93,13 @@ automated suites (12 suite executions total). All installers were created,
 and the collector checked the revision and test result of each OS package.
 Mac ad-hoc signing and arm64 verification passed. M1 OBS-load, Mac modifier
 behavior and physical-camera acceptance remain pending. See CLOUD_BUILDS.md.
+
+## 2026-10-26 — r17 Mac-only diagnostic package
+
+The maintainer confirmed M1 OBS loads the original plugin after moving it to
+the user's Library, but it cannot redock. r17 investigates that issue without
+claiming a root cause. Run 40393283631 compiled arm64, passed four suites,
+created the home-domain PKG, actually installed it under /Users/runner/Library/
+Application Support/obs-studio/plugins, compared binaries and verified signing.
+Windows/Linux were deliberately not scheduled. M1 dock/undock and camera checks
+remain pending. See MAC_DOCK_R17.md for controls, evidence and operator steps.

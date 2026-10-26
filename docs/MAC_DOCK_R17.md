@@ -84,3 +84,24 @@ References:
 - https://doc.qt.io/qt-6/qdockwidget.html
 - https://developer.apple.com/library/archive/documentation/DeveloperTools/Reference/DistributionDefinitionRef/Chapters/Distribution_XML_Ref.html
 - https://www.swift.org/install/macos/package_installer/
+
+## Cloud and local results
+
+Run [40393283631](https://github.com/wzaggle/SimpleCamDirect/actions/runs/40393283631)
+passed for aa7055ee9c19251596dac83ea25ec88d4b42c5fe. Exactly one native
+job ran (macos); no Windows/Linux compile jobs were scheduled. The combined
+collector correctly skipped this single-platform run.
+
+- Native Apple Silicon compile and all four automated suites passed.
+- Product package creation, user-domain installer execution, staged/installed
+  binary hash comparison, and installed bundle signature verification passed.
+- Installer log explicitly reports base path /Users/runner; the verified bundle
+  is /Users/runner/Library/Application Support/obs-studio/plugins/simplecamptz.plugin.
+- Separate local Qt offscreen title-bar smoke: seven checks, zero failures
+  (float/redock/close/lock). This does not test native Cocoa dragging.
+- Common/non-Mac entry and dock source paths were compared and are unchanged.
+- M1 drag and saved-layout acceptance remain pending. This is a diagnostic build,
+  not a claimed fix for the drag issue.
+
+[Mac package](https://github.com/wzaggle/SimpleCamDirect/actions/runs/40393283631/artifacts/12685942914)
+expires 2026-11-02; download for local retention.
