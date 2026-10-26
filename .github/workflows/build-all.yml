@@ -19,8 +19,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: simplecam-packages-${{ github.ref }}
-  cancel-in-progress: false
+  group: simplecam-packages-${{ inputs.source_revision || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   prepare:
