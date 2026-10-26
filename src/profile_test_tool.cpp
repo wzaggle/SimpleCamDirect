@@ -1003,7 +1003,6 @@ void CameraProfileTestDialog::runPacketSequence(
 	std::function<void(bool, const QVector<QByteArray> &, const QString &)> completion)
 {
 	const QString host = host_->text().trimmed();
-	const quint16 port = static_cast<quint16>(port_->value());
 	if (host.isEmpty() || packets.isEmpty()) {
 		completion(false, {}, QStringLiteral("Missing host or rendered packet"));
 		return;

@@ -62,6 +62,8 @@ def build_sdk(kind):
     build = sdk / 'build'
     install = sdk / 'install'
     prefixes = [install]
+    if kind == 'macos':
+        prefixes.append(install / 'Frameworks')
     options = ['-DENABLE_FRONTEND=OFF', '-DENABLE_PLUGINS=OFF', '-DENABLE_SCRIPTING=OFF',
                '-DENABLE_BROWSER=OFF', '-DCMAKE_BUILD_TYPE=' + CONFIG,
                '-DOBS_VERSION_OVERRIDE=' + DEPS['obs']['version']]

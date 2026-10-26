@@ -81,6 +81,12 @@ if(BUILD_TESTING)
   add_executable(simplecamptz_packet_tests tests/visca_packets_test.cpp)
   target_include_directories(simplecamptz_packet_tests PRIVATE src)
   target_compile_features(simplecamptz_packet_tests PRIVATE cxx_std_17)
+  # These fixtures use assert(); keep their checks enabled in release CI builds.
+  if(MSVC)
+    target_compile_options(simplecamptz_packet_tests PRIVATE /UNDEBUG)
+  else()
+    target_compile_options(simplecamptz_packet_tests PRIVATE -UNDEBUG)
+  endif()
   add_test(NAME simplecamptz_packet_tests COMMAND simplecamptz_packet_tests)
 
   add_executable(simplecamptz_profile_tests
