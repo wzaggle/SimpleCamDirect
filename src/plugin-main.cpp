@@ -5,6 +5,9 @@
 #ifdef Q_OS_MACOS
 #include "mac_dock_support.hpp"
 #endif
+#ifdef Q_OS_LINUX
+#include "linux_dock_support.hpp"
+#endif
 
 #include <obs-frontend-api.h>
 #include <obs-module.h>
@@ -197,6 +200,9 @@ bool obs_module_load(void)
 #ifdef Q_OS_MACOS
 	simplecam::installMacDockSupport(cameraControlDock, settingsPath);
 #endif
+#ifdef Q_OS_LINUX
+	simplecam::installLinuxDockSupport(cameraControlDock);
+#endif
 	// Isolation test: OBS owns its native dock separators. Do not install a
 	// main-window stylesheet override, proxy style, or custom resize grip.
 	obs_log(LOG_INFO, "[SimpleCamPTZ DockIsolation] build=native-separators-r1 override=OFF customGrip=OFF");
@@ -217,6 +223,9 @@ void obs_module_unload(void)
 	simplecam::shutdownPresetSourceUi();
 #ifdef Q_OS_MACOS
 	simplecam::shutdownMacDockSupport();
+#endif
+#ifdef Q_OS_LINUX
+	simplecam::shutdownLinuxDockSupport();
 #endif
 	obs_frontend_remove_event_callback(onFrontendEvent, nullptr);
 	// The timer is parented to the control dock. OBS may already have destroyed

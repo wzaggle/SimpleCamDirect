@@ -119,3 +119,11 @@ Windows/Mac/Linux compile, four suites on each, all installers and same-revision
 collection. Mac user-domain install verification also passed. Local concurrency
 regression reports 34 checks, zero failures, including the startup query cases.
 Real camera startup slider acceptance remains pending. See STARTUP_ZOOM_R18.md.
+
+## 2026-10-27 — r18 acceptance and r19 Linux diagnostic
+
+Maintainer confirms Windows and M1 startup zoom initialization pass. Ubuntu
+functions pass so far, but its floating dock cannot move; top-edge resizing
+moves the bottom edge, while other OBS docks work. r19 is an unaccepted Linux
+window experiment, not a replacement geometry policy for Windows/Mac.
+See LINUX_DOCK_R19.md for test controls and required evidence.

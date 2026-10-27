@@ -29,6 +29,10 @@ if(APPLE)
   target_sources(simplecamptz PRIVATE src/mac_dock_support.cpp)
 endif()
 
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  target_sources(simplecamptz PRIVATE src/linux_dock_support.cpp)
+endif()
+
 find_package(libobs REQUIRED)
 find_package(obs-frontend-api REQUIRED)
 find_package(Qt6 REQUIRED COMPONENTS Core Widgets Network)

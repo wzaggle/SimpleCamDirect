@@ -2430,6 +2430,13 @@ void CameraControlDock::updateFloatingLimits()
 		return;
 	}
 #endif
+#ifdef Q_OS_LINUX
+	// r19: isolate window-manager drag/resize behavior from dynamic maxima.
+	if (floatingDock_->property("simplecamptz.linuxRelaxFloatingLimits").toBool()) {
+		floatingDock_->setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
+		return;
+	}
+#endif
 	const int rowHeight = camera1Card_->presetRowHeight_;
 	const int fullContentHeight = layout()->minimumSize().height() + 7 * (34 - rowHeight);
 	if (!settingsMode_)

@@ -161,3 +161,13 @@ never moves/recalls/powers on a camera and does not disable controls on failure.
 The constructor remains free of network activity; setters coalesce refreshes
 only after startup initialization is enabled. See STARTUP_ZOOM_R18.md.
 Shared-runtime validation uses all platforms again. Mac geometry is not changed.
+
+## Linux floating dock diagnostic (2026-10-27, r19)
+
+Read docs/LINUX_DOCK_R19.md before Linux dock work. Release dynamic floating
+wrapper maxima on Linux by default, with reversible native/Qt title-bar and
+limits diagnostics. Preserve OBS ownership, Lock Docks, saved layout and existing
+minimum content constraints. Do not auto-dock or modify Windows/Mac paths.
+Windows and M1 r18 startup zoom passed maintainer tests. Ubuntu functions pass
+so far, but floating drag/edge behavior remains under investigation. Automatic
+CI selection is linux for this scoped change; use all for future shared work.

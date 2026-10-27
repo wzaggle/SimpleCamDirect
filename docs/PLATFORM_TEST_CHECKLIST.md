@@ -214,3 +214,11 @@ See MAC_DOCK_R17.md. Intel OBS-load/hardware checks remain separate.
 - [ ] Query updates never send zoom movement or power-on commands.
 
 See STARTUP_ZOOM_R18.md for simulated and native-build evidence.
+
+## r19 Linux floating-window gate
+
+Windows/M1 r18 startup query passed maintainer testing. On Ubuntu, test floating
+title-bar dragging, both vertical resize edges, dock/undock and clean shutdown
+with the r19 diagnostic defaults, then the optional Qt title bar if needed.
+Record Qt platform/session from LinuxDockDiag; do not claim live drag success
+from native compilation or offscreen UI tests. See LINUX_DOCK_R19.md.

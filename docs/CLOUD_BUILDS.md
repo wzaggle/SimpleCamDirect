@@ -142,3 +142,9 @@ ci/push-platform.txt is restored to all for the shared startup-zoom change.
 Run 40402713949 passed all three platforms, their tests, installers and combined
 revision check. The earlier r17 Mac-only automatic selection is superseded for
 this shared change; manual platform choices still work. See STARTUP_ZOOM_R18.md.
+
+## r19 Linux-only diagnostic build
+
+ci/push-platform.txt selects linux for the floating-dock investigation. Download
+packages-linux from this run; no new Windows/Mac binaries are requested. Shared
+changes must restore all. See LINUX_DOCK_R19.md for acceptance procedure.
