@@ -67,6 +67,7 @@ public:
 	{
 		main_ = qobject_cast<QMainWindow *>(dock->parentWidget());
 		clock_.start();
+		log("before-limits-release");
 		dock->installEventFilter(this);
 		// Start this diagnostic with outer limits released. The menu permits
 		// an A/B test against the previously accepted Windows-style limits.
@@ -146,13 +147,16 @@ private:
 		const QByteArray parent = dock_->parentWidget() ? dock_->parentWidget()->metaObject()->className() : "none";
 		obs_log(LOG_INFO,
 			"[SimpleCamPTZ LinuxDockDiag] build=r19 stage=%s parent=%s main=%d floating=%d area=%d allowed=%u features=%u "
-			"flags=%llu nativeAttribute=%d qtTitle=%d relaxed=%d size=%dx%d min=%dx%d max=%dx%d buttons=%u modifiers=%u",
+			"flags=%llu nativeAttribute=%d qtTitle=%d relaxed=%d pos=%d,%d size=%dx%d frame=%d,%d:%dx%d "
+			"min=%dx%d max=%dx%d contentMinHint=%dx%d buttons=%u modifiers=%u",
 			stage, parent.constData(), main_ ? 1 : 0, dock_->isFloating() ? 1 : 0,
 			main_ ? static_cast<int>(main_->dockWidgetArea(dock_)) : -1,
 			static_cast<unsigned>(dock_->allowedAreas().toInt()), static_cast<unsigned>(dock_->features().toInt()),
 			static_cast<unsigned long long>(dock_->windowFlags().toInt()), dock_->testAttribute(Qt::WA_NativeWindow) ? 1 : 0,
 			dock_->titleBarWidget() ? 1 : 0, dock_->property("simplecamptz.linuxRelaxFloatingLimits").toBool() ? 1 : 0,
-			dock_->width(), dock_->height(), dock_->minimumWidth(), dock_->minimumHeight(), dock_->maximumWidth(), dock_->maximumHeight(),
+			dock_->x(), dock_->y(), dock_->width(), dock_->height(), dock_->frameGeometry().x(), dock_->frameGeometry().y(),
+			dock_->frameGeometry().width(), dock_->frameGeometry().height(), dock_->minimumWidth(), dock_->minimumHeight(), dock_->maximumWidth(), dock_->maximumHeight(),
+			controls_ ? controls_->minimumSizeHint().width() : -1, controls_ ? controls_->minimumSizeHint().height() : -1,
 			static_cast<unsigned>(QApplication::mouseButtons().toInt()), static_cast<unsigned>(QApplication::keyboardModifiers().toInt()));
 	}
 

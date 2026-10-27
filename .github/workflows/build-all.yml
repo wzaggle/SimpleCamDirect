@@ -1,5 +1,5 @@
 name: Build All Platforms
-run-name: SimpleCamPTZ ${{ inputs.platform || 'macos' }} packages ${{ inputs.source_revision || github.sha }}
+run-name: SimpleCamPTZ ${{ inputs.platform || 'automatic-selection' }} packages ${{ inputs.source_revision || github.sha }}
 
 on:
   workflow_dispatch:
@@ -30,7 +30,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: simplecam-packages-${{ inputs.platform || 'macos' }}-${{ inputs.source_revision || github.ref }}
+  group: simplecam-packages-${{ inputs.platform || 'automatic-selection' }}-${{ inputs.source_revision || github.ref }}
   cancel-in-progress: true
 
 jobs:
