@@ -55,3 +55,16 @@ Local Qt 6.4.2/OBS 32.2.1 syntax check passed. Optional title-bar smoke test:
 Qt, not a live Ubuntu desktop. Native Linux build/tests/package are pending.
 Windows/Mac preprocessor-excluded changes are checked for preservation; their
 native jobs are deliberately not scheduled for this Linux-only experiment.
+
+### Native package evidence
+
+Run 40568799499 built a550481a4baa7417ab8219374f2161a576051dd3 successfully:
+Linux plugin, all four automated suites, and native Ubuntu DEB passed.
+packages-linux artifact 12763842478 contains this first r19 test package.
+Live Ubuntu drag/resize acceptance remains pending.
+
+The source overlay and current main c51fcf5734a843a80294d1136a2e90dc75161f6f
+also include additional frame/client position and minimum-hint logging, plus a
+corrected automatic workflow label. Follow-up run 40568935761 is still in
+Ubuntu dependency installation at handoff. Its runtime diagnostic behavior is
+otherwise the same; do not claim that later binary compiled until CI finishes.
