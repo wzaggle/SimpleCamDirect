@@ -66,3 +66,10 @@ not change the backend or launcher on an operator machine.
 The first Mac test also rejected the dummy transition fixture because its
 required audio_render callback was missing. Add a no-audio callback and stop
 the test if fixture registration fails. The production lookup is unchanged.
+
+Run 40622368287 passed all five suites and packaging on Windows/Linux. Mac
+compiled and reached core teardown without a scene-selection assertion failure,
+then crashed in the headless fixture cleanup. Explicitly remove fixture scene
+items/sources and drain the destroy queue before shutting down a core with no
+video tick. Capture an LLDB backtrace if that test still fails. This changes
+only regression-test teardown, not plugin unload or production scene ownership.

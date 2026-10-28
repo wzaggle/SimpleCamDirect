@@ -239,7 +239,16 @@ def main():
     test_command = ['ctest', '--test-dir', build, '-C', CONFIG, '--output-on-failure']
     if kind == 'linux':
         test_command = ['xvfb-run', '--auto-servernum'] + test_command
-    run(*test_command, env=test_environment(kind))
+    try:
+        run(*test_command, env=test_environment(kind))
+    except subprocess.CalledProcessError:
+        if kind == 'macos':
+            # Capture a native backtrace if the headless OBS-core fixture crashes.
+            diagnostic_test = build / CONFIG / 'simplecamptz_program_output_tests'
+            subprocess.run(['lldb', '--batch', '-o', 'run', '-k', 'thread backtrace all',
+                            '--', str(diagnostic_test)], cwd=ROOT, env=test_environment(kind),
+                           timeout=60, check=False)
+        raise
     folder = {'windows': 'Windows', 'macos': 'macOS', 'linux': 'Linux'}[kind]
     output = ROOT / 'packages' / folder
     package(kind, build, output)

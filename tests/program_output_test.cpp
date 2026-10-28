@@ -113,12 +113,23 @@ int main()
 	checkOutput(nullptr, nullptr, "Non-scene output is not mistaken for editable scene");
 	obs_set_output_source(0, nullptr);
 	obs_source_release(transition);
+	// No video tick runs in this fixture. Remove scene items explicitly so
+	// pending visibility/active-child references cannot survive core shutdown.
+	for (obs_scene_t *scene : {incoming, program, editable}) {
+		obs_scene_enum_items(scene, [](obs_scene_t *, obs_sceneitem_t *item, void *) {
+			obs_sceneitem_remove(item);
+			return true;
+		}, nullptr);
+		obs_source_remove(obs_scene_get_source(scene));
+	}
 	obs_scene_release(incoming);
 	obs_scene_release(program);
 	obs_scene_release(editable);
 	obs_source_release(camera1);
 	obs_source_release(camera2);
+	obs_wait_for_destroy_queue();
+	std::cout << checks << " checks, " << failures << " failures before core shutdown" << std::endl;
 	obs_shutdown();
-	std::cout << checks << " checks, " << failures << " failures\n";
+	std::cout << "OBS core shutdown completed" << std::endl;
 	return failures ? 1 : 0;
 }
