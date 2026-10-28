@@ -155,3 +155,8 @@ Automatic selection is all again. A fifth native suite,
 simplecamptz_program_output_tests, exercises OBS scene copies and transition
 source selection. It does not access cameras or initialize video rendering.
 Preserve the existing four suites and platform installers.
+
+r20 final run 40622959759 passed all five native suites per platform and all
+packaging/collection steps. Combined artifact 12788730201 (source b6a4acbed)
+contains Windows, macOS arm64 and Linux; expires 2026-11-04. A passing functional
+suite does not certify antivirus safety or physical-camera/OBS UI acceptance.

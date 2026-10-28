@@ -73,3 +73,12 @@ then crashed in the headless fixture cleanup. Explicitly remove fixture scene
 items/sources and drain the destroy queue before shutting down a core with no
 video tick. Capture an LLDB backtrace if that test still fails. This changes
 only regression-test teardown, not plugin unload or production scene ownership.
+
+## Completed native evidence
+
+Final run 40622959759 for b6a4acbed3e54082eaf418595d9e9afbb984056b passed
+Windows x64, macOS arm64 and Ubuntu 24.04 x64 compile, five suites on each,
+installer creation and combined same-revision collection. Mac test teardown now
+passes; its PKG was installed in the runner user domain and its binary/signature
+verified. AllPlatforms artifact 12788730201 expires 2026-11-04. Operator testing
+of Preview/Program independence remains pending; this is not MARK IT acceptance.

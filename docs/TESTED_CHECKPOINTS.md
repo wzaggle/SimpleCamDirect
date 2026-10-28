@@ -136,3 +136,11 @@ reference can be the editable original while output holds a private duplicate.
 r20 reads actual output channel 0 / transition A. See PROGRAM_ON_AIR_R20.md.
 Linux r19 drag issue also reproduces with SimpleCam disabled; forcing Qt xcb
 repairs it and the separate per-user X11 launcher passed operator testing.
+
+### r20 native packages complete
+
+Run 40622959759 / b6a4acbed3e54082eaf418595d9e9afbb984056b passed all three
+native builds, all five suites on each, installers and combined revision check.
+Mac fixture teardown is resolved by explicit scene cleanup before core shutdown.
+This establishes automated scene-selection regression, not live OBS acceptance.
+Research for the next protocol is in ONVIF_RESEARCH.md; ONVIF is not coded yet.
