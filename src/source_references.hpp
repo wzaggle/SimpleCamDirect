@@ -71,6 +71,8 @@ inline obs_sceneitem_t *independentCopyTarget(obs_scene_t *scene, obs_source_t *
 		std::vector<obs_sceneitem_t *> all, selected;
 	} matches{target, {}, {}};
 	if (!scene || !target) return nullptr;
+	// Replacing a child of a reused scene would also alter its parent scenes.
+	if (!sourceReferencePaths(obs_scene_get_source(scene)).empty()) return nullptr;
 	obs_scene_enum_items(scene, [](obs_scene_t *, obs_sceneitem_t *item, void *opaque) {
 		auto &m = *static_cast<Matches *>(opaque);
 		if (obs_sceneitem_get_source(item) == m.target) {
@@ -91,6 +93,7 @@ inline obs_source_t *replaceWithIndependentSource(obs_scene_t *scene, int64_t it
 {
 	obs_sceneitem_t *oldItem = scene ? obs_scene_find_sceneitem_by_id(scene, itemId) : nullptr;
 	if (!oldItem || obs_sceneitem_get_source(oldItem) != original) return nullptr;
+	if (!sourceReferencePaths(obs_scene_get_source(scene)).empty()) return nullptr;
 	obs_source_t *copy = obs_source_duplicate(original, uniqueName, false);
 	if (!copy || copy == original) {
 		obs_source_release(copy);

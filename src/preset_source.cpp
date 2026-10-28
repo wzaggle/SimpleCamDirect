@@ -236,11 +236,12 @@ private:
 				: QStringLiteral("This source is not shared."));
 			copy->setVisible(references.size() > 1);
 			obs_sceneitem_t *item = scene ? obs_scene_find_sceneitem_by_id(obs_scene_from_source(scene.get()), itemId) : nullptr;
-			const bool valid = item && obs_sceneitem_get_source(item) == original.get();
+			const bool valid = item && obs_sceneitem_get_source(item) == original.get() &&
+				sourceReferencePaths(scene.get()).empty();
 			copy->setEnabled(valid);
 			copy->setToolTip(valid
 				? QStringLiteral("Replace only this scene's reference, then edit the independent copy. Other references keep their original settings.")
-				: QStringLiteral("Open the scene containing this preset source and select its item first. Nested scenes must be edited in their own scene."));
+				: QStringLiteral("Select one direct preset item in a scene that is not itself reused inside other scenes. Detach shared containing scenes first."));
 		};
 		refresh();
 		auto *timer = new QTimer(group);

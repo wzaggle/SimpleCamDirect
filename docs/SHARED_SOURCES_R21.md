@@ -32,6 +32,9 @@ sources need no migration; the type id remains `simplecamdirect_preset`.
 - Nested scene/group paths are listed, but contents are not silently edited from
   a parent. Open the actual containing scene. Group-only contexts without an
   unambiguous direct item are not supported in this first version.
+- If the containing scene is itself reused by another scene, the action is
+  disabled: replacing its child would also change those parents. Make that
+  containing scene independent first. The guard is rechecked before replacement.
 - Switching scenes does not retarget the operation. Deleted/replaced items and
   scene-collection changes are revalidated. Failure leaves the old reference.
 - OBS applies ordinary Properties edits live. The copy action restores the

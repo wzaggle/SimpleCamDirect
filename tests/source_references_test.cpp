@@ -44,6 +44,7 @@ int main()
 	check(nested, "Nested path names its actual containing scene");
 	check(simplecam::sourceReferencePaths(other).size() == 2, "Count repeated occurrences in one scene");
 	check(simplecam::independentCopyTarget(parent, source) == nullptr, "Never silently replace contents of a nested scene");
+	check(simplecam::independentCopyTarget(second, source) == nullptr, "Reused containing scene cannot alter its parents");
 	check(simplecam::independentCopyTarget(first, other) == nullptr, "Ambiguous unselected occurrences are rejected");
 	check(simplecam::independentCopyTarget(first, source) == oldItem, "One direct occurrence is unambiguous");
 	obs_sceneitem_select(oldItem, true);

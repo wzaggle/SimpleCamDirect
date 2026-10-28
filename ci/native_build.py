@@ -229,6 +229,7 @@ def main():
     extra = ['-DCMAKE_PREFIX_PATH=' + ';'.join(map(str, prefixes))] if prefixes else []
     run('cmake', '--preset', preset, *extra)
     build = ROOT / 'out/build' / ('simplecamptz-' + preset)
+    # r21: validate shared-source replacement, including reused-container guards.
     targets = ['simplecamptz', 'simplecamptz_packet_tests', 'simplecamptz_profile_tests',
                'simplecamptz_runtime_state_tests', 'simplecamptz_camera_concurrency_tests',
                'simplecamptz_program_output_tests', 'simplecamptz_source_reference_tests']
