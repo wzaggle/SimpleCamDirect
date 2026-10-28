@@ -58,3 +58,11 @@ Product/source ids/version and user preset/settings files are unchanged.
 Shared native validation selects all platforms. Local Windows overlay uses
 Denver ZIP timestamps. Linux r19 diagnostics remain present; the independent
 X11 launcher is not added to the plugin installer by this revision.
+
+Initial Linux compile passed, but the new OBS-core test could not start because
+there was no X display. The Linux test gate now runs under Xvfb (no GPU/video
+rendering), with xvfb/xauth explicitly installed. This is CI-only setup; it does
+not change the backend or launcher on an operator machine.
+The first Mac test also rejected the dummy transition fixture because its
+required audio_render callback was missing. Add a no-audio callback and stop
+the test if fixture registration fails. The production lookup is unchanged.

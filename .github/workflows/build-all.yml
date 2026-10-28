@@ -99,7 +99,7 @@ jobs:
             libjansson-dev libsimde-dev uthash-dev zlib1g-dev uuid-dev libglib2.0-dev \
             libx11-dev libx11-xcb-dev libxcb1-dev libxcb-randr0-dev libxcb-xfixes0-dev \
             libxcb-shm0-dev libxcb-xinput-dev libglvnd-dev libegl1-mesa-dev libdrm-dev \
-            qt6-base-dev libqt6svg6-dev
+            qt6-base-dev libqt6svg6-dev xvfb xauth
       - name: Ensure Windows installer compiler
         if: runner.os == 'Windows'
         shell: pwsh

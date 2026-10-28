@@ -18,6 +18,7 @@ void *create(obs_data_t *, obs_source_t *source) { return source; }
 void destroy(void *) {}
 uint32_t dimension(void *) { return 64; }
 void render(void *, gs_effect_t *) {}
+bool audioRender(void *, uint64_t *, obs_source_audio_mix *, uint32_t, size_t, size_t) { return false; }
 obs_source_t *topSource(obs_source_t *sceneSource)
 {
 	obs_source_t *top = nullptr; // Borrowed; the scene owns its items.
@@ -64,6 +65,7 @@ int main()
 	transitionInfo.create = create;
 	transitionInfo.destroy = destroy;
 	transitionInfo.video_render = render;
+	transitionInfo.audio_render = audioRender;
 	obs_register_source(&transitionInfo);
 
 	obs_source_t *camera1 = obs_source_create_private(cameraInfo.id, "Camera 1", nullptr);
@@ -89,7 +91,11 @@ int main()
 	checkOutput(programSource, camera1, "Preview visibility edit does not change Program indicator");
 
 	obs_source_t *transition = obs_source_create_private(transitionInfo.id, "Program transition", nullptr);
-	check(transition != nullptr, "Program transition created without camera IO");
+	if (!transition || obs_source_get_type(transition) != OBS_SOURCE_TYPE_TRANSITION) {
+		std::cerr << "Program transition fixture registration failed\n";
+		return 1;
+	}
+	check(true, "Program transition created without camera IO");
 	obs_transition_set(transition, programSource);
 	obs_set_output_source(0, transition);
 	checkOutput(programSource, camera1, "Transition resolves actual private Program copy");

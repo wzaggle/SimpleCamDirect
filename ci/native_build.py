@@ -235,7 +235,11 @@ def main():
     run('cmake', '--build', build, '--config', CONFIG, '--target', *targets, '--parallel', PARALLEL)
     if kind == 'macos':
         stage_macos_test_libraries(build)
-    run('ctest', '--test-dir', build, '-C', CONFIG, '--output-on-failure', env=test_environment(kind))
+    # OBS core needs an X display even though this scene test does not render video.
+    test_command = ['ctest', '--test-dir', build, '-C', CONFIG, '--output-on-failure']
+    if kind == 'linux':
+        test_command = ['xvfb-run', '--auto-servernum'] + test_command
+    run(*test_command, env=test_environment(kind))
     folder = {'windows': 'Windows', 'macos': 'macOS', 'linux': 'Linux'}[kind]
     output = ROOT / 'packages' / folder
     package(kind, build, output)
