@@ -2,6 +2,7 @@
 #include "camera_runtime.hpp"
 #include "preset_source.hpp"
 #include "profile_test_tool.hpp"
+#include "program_output.hpp"
 #ifdef Q_OS_MACOS
 #include "mac_dock_support.hpp"
 #endif
@@ -146,7 +147,7 @@ namespace simplecam {
 
 obs_source_t *currentProgramSceneSource()
 {
-	return obs_frontend_get_current_scene();
+	return acquireProgramOutputScene();
 }
 
 } // namespace simplecam

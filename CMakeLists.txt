@@ -122,3 +122,11 @@ if(WIN32)
     VERBATIM
   )
 endif()
+
+if(BUILD_TESTING)
+  add_executable(simplecamptz_program_output_tests EXCLUDE_FROM_ALL tests/program_output_test.cpp)
+  target_include_directories(simplecamptz_program_output_tests PRIVATE src)
+  target_compile_features(simplecamptz_program_output_tests PRIVATE cxx_std_17)
+  target_link_libraries(simplecamptz_program_output_tests PRIVATE OBS::libobs)
+  add_test(NAME simplecamptz_program_output_tests COMMAND simplecamptz_program_output_tests)
+endif()

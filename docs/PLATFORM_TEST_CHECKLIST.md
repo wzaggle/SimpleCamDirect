@@ -222,3 +222,12 @@ title-bar dragging, both vertical resize edges, dock/undock and clean shutdown
 with the r19 diagnostic defaults, then the optional Qt title bar if needed.
 Record Qt platform/session from LinuxDockDiag; do not claim live drag success
 from native compilation or offscreen UI tests. See LINUX_DOCK_R19.md.
+
+## r20 Program vs Preview regression
+
+On every tested platform, show the same working scene in both Studio Mode panes.
+Bring another mapped camera scene to the top in Preview. The ON-AIR warning
+must remain on the outgoing Program camera until transition completion. Test
+Cut/Fade, nested scenes, hidden layers, no mapped feeds and Studio Mode off.
+The native Program-output suite validates scene-copy selection without GPU
+rendering; actual OBS UI/transition behavior still needs the operator check.

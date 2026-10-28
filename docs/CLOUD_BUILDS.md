@@ -148,3 +148,10 @@ this shared change; manual platform choices still work. See STARTUP_ZOOM_R18.md.
 ci/push-platform.txt selects linux for the floating-dock investigation. Download
 packages-linux from this run; no new Windows/Mac binaries are requested. Shared
 changes must restore all. See LINUX_DOCK_R19.md for acceptance procedure.
+
+## r20 shared Program-output correction
+
+Automatic selection is all again. A fifth native suite,
+simplecamptz_program_output_tests, exercises OBS scene copies and transition
+source selection. It does not access cameras or initialize video rendering.
+Preserve the existing four suites and platform installers.

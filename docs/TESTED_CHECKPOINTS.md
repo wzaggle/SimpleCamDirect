@@ -127,3 +127,12 @@ functions pass so far, but its floating dock cannot move; top-edge resizing
 moves the bottom edge, while other OBS docks work. r19 is an unaccepted Linux
 window experiment, not a replacement geometry policy for Windows/Mac.
 See LINUX_DOCK_R19.md for test controls and required evidence.
+
+## r20 Program-only indicator correction (awaiting operator acceptance)
+
+The production operator reproduced the ON-AIR error by reordering camera scenes
+in Preview of the scene also in Program. Code inspection confirms the frontend
+reference can be the editable original while output holds a private duplicate.
+r20 reads actual output channel 0 / transition A. See PROGRAM_ON_AIR_R20.md.
+Linux r19 drag issue also reproduces with SimpleCam disabled; forcing Qt xcb
+repairs it and the separate per-user X11 launcher passed operator testing.

@@ -230,7 +230,8 @@ def main():
     run('cmake', '--preset', preset, *extra)
     build = ROOT / 'out/build' / ('simplecamptz-' + preset)
     targets = ['simplecamptz', 'simplecamptz_packet_tests', 'simplecamptz_profile_tests',
-               'simplecamptz_runtime_state_tests', 'simplecamptz_camera_concurrency_tests']
+               'simplecamptz_runtime_state_tests', 'simplecamptz_camera_concurrency_tests',
+               'simplecamptz_program_output_tests']
     run('cmake', '--build', build, '--config', CONFIG, '--target', *targets, '--parallel', PARALLEL)
     if kind == 'macos':
         stage_macos_test_libraries(build)

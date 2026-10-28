@@ -171,3 +171,15 @@ minimum content constraints. Do not auto-dock or modify Windows/Mac paths.
 Windows and M1 r18 startup zoom passed maintainer tests. Ubuntu functions pass
 so far, but floating drag/edge behavior remains under investigation. Automatic
 CI selection is linux for this scoped change; use all for future shared work.
+
+## Program-only ON-AIR (r20)
+
+Read docs/PROGRAM_ON_AIR_R20.md. The indicator must scan channel 0's actual
+scene (including private Studio Mode copies), not the editable frontend scene.
+Follow transition SOURCE_A to retain outgoing indication until completion;
+get_active_source switches early to B. Never fall back to Preview on empty
+output. Keep the 250ms poll and existing UUID/layer scan and camera IO unchanged.
+Native libobs regression covers editable/private scene separation. Restore
+all-platform CI for this shared change. Live Studio Mode acceptance is pending.
+Linux drag lock reproduces with plugin disabled; xcb launch repairs it locally.
+Do not keep changing SimpleCam geometry to fix that host/session interaction.
