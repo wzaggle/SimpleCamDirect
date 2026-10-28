@@ -43,8 +43,6 @@ inquiry, independent camera queues, and Ctrl+Clear for selected-camera/group
 labels only. Physical camera memory is not erased by Clear. Do not describe
 Ctrl+Clear as clearing all cameras.
 
-## r16 clear/delete update
-
 ## r21 shared preset sources
 
 Document the Used in scenes list and Make independent copy action, with numbered
@@ -52,7 +50,7 @@ source identity and direct-versus-nested reference examples. Explain ordinary
 shared edits versus independent copies. See SHARED_SOURCES_R21.md for current
 behavior, boundaries and acceptance checks.
 
-## r16 clear/delete details
+## r16 clear/delete update
 
 Ctrl+Clear remains selected-camera/current-group only; Ctrl+Alt+Clear clears
 that group on all camera slots after confirmation. On Mac use Command and

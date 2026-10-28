@@ -30,6 +30,7 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 #include <QMessageBox>
+#include <QRegularExpression>
 
 #include <algorithm>
 #include <cstdint>
@@ -78,7 +79,7 @@ const char *sourceText(const char *key, const char *fallback)
 constexpr char kPropertiesMarker[] = "Select the camera for this SimpleCamPTZ preset source.";
 constexpr char kCopyNumber[] = "simplecam_independent_number";
 
-QString independentBaseName(obs_source_t *source);
+QString independentBaseName(obs_source_t *source, int &nextNumber);
 
 using SourceRef = std::shared_ptr<obs_source_t>;
 using SettingsRef = std::shared_ptr<obs_data_t>;
@@ -100,8 +101,8 @@ void completeIndependentCopy(const SourceRef &scene, const SourceRef &original, 
 	const bool sceneStillExists = registeredScene == scene.get();
 	obs_source_release(registeredScene);
 	if (!sceneStillExists || obs_source_removed(original.get())) return;
-	const QString base = independentBaseName(original.get());
 	int number = 2;
+	const QString base = independentBaseName(original.get(), number);
 	QString name;
 	for (; number < 100000; ++number) {
 		name = QStringLiteral("%1 (%2)").arg(base).arg(number);
@@ -365,12 +366,23 @@ QString makeDisplayName(const PresetSourceData &data)
 	return QStringLiteral("Move %1 to %2").arg(camera, preset);
 }
 
-QString independentBaseName(obs_source_t *source)
+QString independentBaseName(obs_source_t *source, int &nextNumber)
 {
 	std::lock_guard<std::mutex> lock(liveSourcesMutex);
+	QString base = QStringLiteral("SimpleCam Preset");
 	for (auto *data : liveSources)
-		if (data->source == source) return makeDisplayName(*data);
-	return QStringLiteral("SimpleCam Preset");
+		if (data->source == source) base = makeDisplayName(*data);
+	// Also reserve legacy OBS-generated suffixes. A shared source's suffix
+	// may follow </span>; checking only plain candidate names would miss it.
+	const QRegularExpression suffix(QStringLiteral(R"( \((\d+)\)$)"));
+	for (auto *data : liveSources) {
+		if (makeDisplayName(*data) != base) continue;
+		nextNumber = std::max(nextNumber, data->independentNumber + 1);
+		const auto match = suffix.match(QString::fromUtf8(obs_source_get_name(data->source)));
+		if (match.hasMatch())
+			nextNumber = std::max(nextNumber, std::min(match.captured(1).toInt(), 99999) + 1);
+	}
+	return base;
 }
 
 void sourceUpdate(void *opaque, obs_data_t *settings)

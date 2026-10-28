@@ -231,3 +231,13 @@ must remain on the outgoing Program camera until transition completion. Test
 Cut/Fade, nested scenes, hidden layers, no mapped feeds and Studio Mode off.
 The native Program-output suite validates scene-copy selection without GPU
 rendering; actual OBS UI/transition behavior still needs the operator check.
+
+## r21 shared preset source Properties
+
+- [ ] Used in scenes lists exact-source references, hidden items and nested paths.
+- [ ] Independent copy replaces only the captured direct item and gets a new suffix.
+- [ ] Original settings, other references, item order/visibility/lock are preserved.
+- [ ] Ordinary Cancel creates nothing; ambiguous/reused-container targets are disabled.
+- [ ] Save/restart preserves independence, names and numeric suffix.
+- [ ] Properties remains compact and shutdown has no pending plugin UI callbacks.
+- [ ] Validate live OBS behavior separately on Windows, Apple Silicon and Ubuntu.
