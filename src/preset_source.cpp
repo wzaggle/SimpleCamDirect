@@ -2,6 +2,7 @@
 
 #include "camera_runtime.hpp"
 #include "source_references.hpp"
+#include "sharing_section.hpp"
 
 #include <plugin-support.h>
 
@@ -24,13 +25,12 @@
 #include <QTimer>
 #include <QVariant>
 #include <QMetaObject>
-#include <QGroupBox>
 #include <QLabel>
-#include <QPlainTextEdit>
 #include <QPushButton>
 #include <QVBoxLayout>
 #include <QMessageBox>
 #include <QRegularExpression>
+#include <QScreen>
 
 #include <algorithm>
 #include <cstdint>
@@ -177,12 +177,35 @@ private:
 		SourceRef original = ownSource(obs_get_source_by_uuid(sourceUuid.toUtf8().constData()));
 		if (!original || std::strcmp(obs_source_get_id(original.get()), kSourceId) != 0) return;
 		addSharingControls(guard, container, scene, original);
+	}
+
+	void fitProperties(QPointer<QDialog> guard, QPointer<QWidget> container,
+			   QPointer<SharingSection> sharing)
+	{
+		if (!guard || !container || !sharing || !guard->isVisible()) return;
+		auto *splitter = guard->findChild<QSplitter *>(QStringLiteral("windowSplitter"));
+		if (!splitter || !container->layout()) return;
 		splitter->setMinimumHeight(0);
 		if (QWidget *preview = guard->findChild<QWidget *>(QStringLiteral("previewFrame"))) preview->hide();
+		// Measure the established compact form without the optional section.
+		sharing->hide();
+		container->layout()->invalidate();
+		const int baseFormHeight = container->layout()->sizeHint().height();
+		auto *buttons = guard->findChild<QDialogButtonBox *>();
+		const int footer = buttons ? buttons->sizeHint().height() : 36;
+		const int baseHeight = std::max(280, baseFormHeight + footer + 56);
+		QScreen *screen = guard->screen();
+		const int frameHeight = std::max(0, guard->frameGeometry().height() - guard->height());
+		const int screenLimit = screen ? std::max(1, screen->availableGeometry().height() - frameHeight - 24) : 900;
+		sharing->setVisible(sharing->isShared());
+		const int sectionHeight = sharing->fitToBudget(std::max(0, screenLimit - baseHeight - 12),
+			std::max(1, container->contentsRect().width()));
+		container->layout()->invalidate();
 		const int formHeight = container->layout()->sizeHint().height();
 		for (QWidget *parent = container->parentWidget(); parent && parent != guard.data(); parent = parent->parentWidget()) {
 			if (auto *view = qobject_cast<QScrollArea *>(parent)) {
-				view->setMinimumHeight(formHeight + 12);
+				// Let the existing outer form scroll on a very short display.
+				view->setMinimumHeight(std::max(0, std::min(formHeight + 12, screenLimit - footer - 56)));
 				break;
 			}
 		}
@@ -190,37 +213,25 @@ private:
 			guard->layout()->invalidate();
 			guard->layout()->activate();
 		}
-		auto *buttons = guard->findChild<QDialogButtonBox *>();
-		const int footer = buttons ? buttons->sizeHint().height() : 36;
-		const int target = std::max(280, std::max(guard->minimumSizeHint().height(), formHeight + footer + 56));
+		const int target = std::min(screenLimit, std::max(guard->minimumSizeHint().height(),
+			baseHeight + sectionHeight + (sharing->isShared() ? 12 : 0)));
 		guard->resize(guard->width(), target);
 	}
 
 	void addSharingControls(QPointer<QDialog> dialog, QWidget *container,
 				const SourceRef &scene, const SourceRef &original)
 	{
-		auto *group = new QGroupBox(QStringLiteral("Used in scenes"), container);
+		auto *group = new SharingSection(container);
 		sharingWidgets_.erase(std::remove_if(sharingWidgets_.begin(), sharingWidgets_.end(),
 			[](const QPointer<QWidget> &widget) { return widget.isNull(); }), sharingWidgets_.end());
 		sharingWidgets_.push_back(group);
-		auto *layout = new QVBoxLayout(group);
-		layout->setContentsMargins(6, 4, 6, 4);
-		layout->setSpacing(3);
-		auto *summary = new QLabel(group);
-		summary->setTextFormat(Qt::PlainText);
-		auto *list = new QPlainTextEdit(group);
-		list->setReadOnly(true);
-		list->setLineWrapMode(QPlainTextEdit::NoWrap);
-		list->setFixedHeight(list->fontMetrics().lineSpacing() * 3 + 12);
-		auto *copy = new QPushButton(QStringLiteral("Make independent copy"), group);
-		copy->setAutoDefault(false);
-		layout->addWidget(summary);
-		layout->addWidget(list);
-		layout->addWidget(copy);
+		auto *copy = group->copy;
 		container->layout()->addWidget(group);
 		obs_sceneitem_t *target = independentCopyTarget(scene ? obs_scene_from_source(scene.get()) : nullptr, original.get());
 		const int64_t itemId = target ? obs_sceneitem_get_id(target) : -1;
-		auto refresh = [summary, list, copy, scene, original, itemId]() {
+		QPointer<SharingSection> sharing(group);
+		QPointer<QWidget> containerGuard(container);
+		auto refresh = [this, dialog, containerGuard, sharing, copy, scene, original, itemId]() {
 			QStringList paths;
 			const auto references = sourceReferencePaths(original.get());
 			for (const auto &reference : references) {
@@ -229,13 +240,10 @@ private:
 				paths.push_back(path);
 			}
 			paths.sort(Qt::CaseInsensitive);
-			const QString text = paths.join(QLatin1Char('\n'));
-			if (list->toPlainText() != text) list->setPlainText(text);
-			list->setFixedHeight(list->fontMetrics().lineSpacing() * static_cast<int>(std::clamp<qsizetype>(paths.size(), 1, 3)) + 12);
-			summary->setText(references.size() > 1
-				? QStringLiteral("Shared source — changes affect every reference listed.")
-				: QStringLiteral("This source is not shared."));
-			copy->setVisible(references.size() > 1);
+			if (sharing->setSceneNames(paths))
+				QTimer::singleShot(0, this, [this, dialog, containerGuard, sharing]() {
+					fitProperties(dialog, containerGuard, sharing);
+				});
 			obs_sceneitem_t *item = scene ? obs_scene_find_sceneitem_by_id(obs_scene_from_source(scene.get()), itemId) : nullptr;
 			const bool valid = item && obs_sceneitem_get_source(item) == original.get() &&
 				sourceReferencePaths(scene.get()).empty();
@@ -245,6 +253,11 @@ private:
 				: QStringLiteral("Select one direct preset item in a scene that is not itself reused inside other scenes. Detach shared containing scenes first."));
 		};
 		refresh();
+		// Wait for OBS and Qt to finish constructing/polishing the form before
+		// its initial measurement. Unchanged polling never overrides user size.
+		QTimer::singleShot(0, this, [this, dialog, containerGuard, sharing]() {
+			fitProperties(dialog, containerGuard, sharing);
+		});
 		auto *timer = new QTimer(group);
 		QObject::connect(timer, &QTimer::timeout, group, refresh);
 		timer->start(1000);

@@ -1,5 +1,13 @@
 # Instructions for coding agents
 
+## Adaptive sharing section (r22)
+
+Read docs/SHARED_PROPERTIES_R22.md. Maintainer passed the independent-copy
+function, but requested a hidden unshared section, borderless plain scene names
+and adaptive, screen-capped initial height. Build Windows only first; automatic
+CI selection is windows until acceptance. Refit only on list/state changes, never
+every timer tick. Keep replacement and naming behavior unchanged.
+
 ## Shared source copies (r21, awaiting operator validation)
 
 Read docs/SHARED_SOURCES_R21.md before Properties/reference work. Capture scene
