@@ -45,6 +45,15 @@ Ctrl+Clear as clearing all cameras.
 
 ## r16 clear/delete update
 
+## r21 shared preset sources
+
+Document the Used in scenes list and Make independent copy action, with numbered
+source identity and direct-versus-nested reference examples. Explain ordinary
+shared edits versus independent copies. See SHARED_SOURCES_R21.md for current
+behavior, boundaries and acceptance checks.
+
+## r16 clear/delete details
+
 Ctrl+Clear remains selected-camera/current-group only; Ctrl+Alt+Clear clears
 that group on all camera slots after confirmation. On Mac use Command and
 Command+Option. A nonempty extra group's Delete action offers Clear All and

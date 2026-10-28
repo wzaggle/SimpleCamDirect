@@ -1,5 +1,15 @@
 # Instructions for coding agents
 
+## Shared source copies (r21, awaiting operator validation)
+
+Read docs/SHARED_SOURCES_R21.md before Properties/reference work. Capture scene
+context at dialog Show, bind our dialog by source UUID, and replace only an
+unambiguous direct item after closing. Use OBS Cancel to restore shared settings,
+then duplicate with captured edits. Preserve item state and numeric copy suffix.
+Never remove the original source or silently modify nested scene contents. All
+queued work/timers must be cancelled before module unload. Keep existing source
+id and camera action/IO behavior. No custom replacement Undo is provided yet.
+
 ## Project intent
 
 This repository builds **SimpleCamPTZ**, an independent OBS PTZ-control plugin inspired by proven SimpleCam behavior. It is not the separate SimpleCamQt desktop controller and should not depend on that application, its Windows registry settings, or its temporary-file request protocol. The intended direction is direct in-process control from OBS source events and dock controls to a camera transport service. The private GitHub repository retains its original `SimpleCamDirect` name for now.

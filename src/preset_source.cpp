@@ -1,6 +1,7 @@
 #include "preset_source.hpp"
 
 #include "camera_runtime.hpp"
+#include "source_references.hpp"
 
 #include <plugin-support.h>
 
@@ -23,11 +24,18 @@
 #include <QTimer>
 #include <QVariant>
 #include <QMetaObject>
+#include <QGroupBox>
+#include <QLabel>
+#include <QPlainTextEdit>
+#include <QPushButton>
+#include <QVBoxLayout>
+#include <QMessageBox>
 
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <mutex>
+#include <memory>
 #include <QString>
 #include <vector>
 
@@ -68,10 +76,72 @@ const char *sourceText(const char *key, const char *fallback)
 // source's camera-combo tooltip inside the known host Properties dialog. No
 // private OBS headers/ABI, global settings or fixed-size constraints are used.
 constexpr char kPropertiesMarker[] = "Select the camera for this SimpleCamPTZ preset source.";
+constexpr char kCopyNumber[] = "simplecam_independent_number";
+
+QString independentBaseName(obs_source_t *source);
+
+using SourceRef = std::shared_ptr<obs_source_t>;
+using SettingsRef = std::shared_ptr<obs_data_t>;
+SourceRef ownSource(obs_source_t *source) { return SourceRef(source, obs_source_release); }
+
+SourceRef editingScene()
+{
+	obs_source_t *scene = obs_frontend_preview_program_mode_active()
+		? obs_frontend_get_current_preview_scene() : obs_frontend_get_current_scene();
+	return ownSource(scene);
+}
+
+void completeIndependentCopy(const SourceRef &scene, const SourceRef &original, int64_t itemId,
+			     const SettingsRef &settings)
+{
+	// Do not switch scenes or search for a replacement target after the dialog
+	// closes. A deleted/replaced target cancels this operation without mutation.
+	obs_source_t *registeredScene = obs_get_source_by_uuid(obs_source_get_uuid(scene.get()));
+	const bool sceneStillExists = registeredScene == scene.get();
+	obs_source_release(registeredScene);
+	if (!sceneStillExists || obs_source_removed(original.get())) return;
+	const QString base = independentBaseName(original.get());
+	int number = 2;
+	QString name;
+	for (; number < 100000; ++number) {
+		name = QStringLiteral("%1 (%2)").arg(base).arg(number);
+		const QByteArray plain = name.toUtf8();
+		const QByteArray shared = QStringLiteral("<span style=\"color:#FF6050;\">%1 *</span>")
+			.arg(name.toHtmlEscaped()).toUtf8();
+		obs_source_t *a = obs_get_source_by_name(plain.constData());
+		obs_source_t *b = obs_get_source_by_name(shared.constData());
+		const bool taken = a || b;
+		obs_source_release(a);
+		obs_source_release(b);
+		if (!taken) break;
+	}
+	if (number == 100000) return;
+	obs_data_set_int(settings.get(), kCopyNumber, number);
+	const QByteArray utf8 = name.toUtf8();
+	obs_source_t *copy = replaceWithIndependentSource(obs_scene_from_source(scene.get()), itemId,
+		original.get(), settings.get(), utf8.constData());
+	if (!copy) {
+		QMessageBox::warning(nullptr, QStringLiteral("SimpleCamPTZ"),
+			QStringLiteral("The original scene item changed or the copy could not be created. No reference was removed."));
+		return;
+	}
+	refreshPresetSourceNames();
+	obs_frontend_save();
+	obs_log(LOG_INFO, "[SimpleCamPTZ IndependentSource] replaced item in scene=%s new_source=%s",
+		obs_source_get_name(scene.get()), obs_source_get_name(copy));
+	obs_frontend_open_source_properties(copy);
+	obs_source_release(copy);
+}
 
 class CompactPresetProperties final : public QObject {
 public:
 	explicit CompactPresetProperties(QObject *parent) : QObject(parent) {}
+	~CompactPresetProperties() override
+	{
+		// Host Properties dialogs may outlive plugin UI shutdown. Remove our
+		// timers/connections while this module's code is still loaded.
+		for (const auto &widget : sharingWidgets_) delete widget.data();
+	}
 protected:
 	bool eventFilter(QObject *watched, QEvent *event) override
 	{
@@ -81,24 +151,31 @@ protected:
 		if (!dialog || dialog->property("simplecamptzPropertiesProbeStarted").toBool())
 			return false;
 		dialog->setProperty("simplecamptzPropertiesProbeStarted", true);
+		// Capture editor context at Show time, before another scene can be selected.
+		const SourceRef scene = editingScene();
 		QPointer<QDialog> guard(dialog);
-		QTimer::singleShot(0, this, [this, guard]() { probe(guard, 0); });
+		QTimer::singleShot(0, this, [this, guard, scene]() { probe(guard, 0, scene); });
 		return false;
 	}
 private:
-	void probe(QPointer<QDialog> guard, int attempt)
+	std::vector<QPointer<QWidget>> sharingWidgets_;
+	void probe(QPointer<QDialog> guard, int attempt, const SourceRef &scene)
 	{
 		if (!guard || !guard->isVisible()) return;
-		bool ours = false;
+		QString sourceUuid;
 		for (QComboBox *combo : guard->findChildren<QComboBox *>())
-			ours = ours || combo->toolTip() == QString::fromUtf8(kPropertiesMarker);
+			if (combo->toolTip().startsWith(QString::fromUtf8(kPropertiesMarker) + QLatin1Char('\n')))
+				sourceUuid = combo->toolTip().section(QLatin1Char('\n'), 1, 1);
 		auto *container = guard->findChild<QWidget *>(QStringLiteral("PropertiesContainer"));
 		auto *splitter = guard->findChild<QSplitter *>(QStringLiteral("windowSplitter"));
-		if (!ours || !container || !container->layout() || !splitter) {
+		if (sourceUuid.isEmpty() || !container || !container->layout() || !splitter) {
 			if (attempt < 19)
-				QTimer::singleShot(25, this, [this, guard, attempt]() { probe(guard, attempt + 1); });
+				QTimer::singleShot(25, this, [this, guard, attempt, scene]() { probe(guard, attempt + 1, scene); });
 			return;
 		}
+		SourceRef original = ownSource(obs_get_source_by_uuid(sourceUuid.toUtf8().constData()));
+		if (!original || std::strcmp(obs_source_get_id(original.get()), kSourceId) != 0) return;
+		addSharingControls(guard, container, scene, original);
 		splitter->setMinimumHeight(0);
 		if (QWidget *preview = guard->findChild<QWidget *>(QStringLiteral("previewFrame"))) preview->hide();
 		const int formHeight = container->layout()->sizeHint().height();
@@ -117,40 +194,84 @@ private:
 		const int target = std::max(280, std::max(guard->minimumSizeHint().height(), formHeight + footer + 56));
 		guard->resize(guard->width(), target);
 	}
+
+	void addSharingControls(QPointer<QDialog> dialog, QWidget *container,
+				const SourceRef &scene, const SourceRef &original)
+	{
+		auto *group = new QGroupBox(QStringLiteral("Used in scenes"), container);
+		sharingWidgets_.erase(std::remove_if(sharingWidgets_.begin(), sharingWidgets_.end(),
+			[](const QPointer<QWidget> &widget) { return widget.isNull(); }), sharingWidgets_.end());
+		sharingWidgets_.push_back(group);
+		auto *layout = new QVBoxLayout(group);
+		layout->setContentsMargins(6, 4, 6, 4);
+		layout->setSpacing(3);
+		auto *summary = new QLabel(group);
+		summary->setTextFormat(Qt::PlainText);
+		auto *list = new QPlainTextEdit(group);
+		list->setReadOnly(true);
+		list->setLineWrapMode(QPlainTextEdit::NoWrap);
+		list->setFixedHeight(list->fontMetrics().lineSpacing() * 3 + 12);
+		auto *copy = new QPushButton(QStringLiteral("Make independent copy"), group);
+		copy->setAutoDefault(false);
+		layout->addWidget(summary);
+		layout->addWidget(list);
+		layout->addWidget(copy);
+		container->layout()->addWidget(group);
+		obs_sceneitem_t *target = independentCopyTarget(scene ? obs_scene_from_source(scene.get()) : nullptr, original.get());
+		const int64_t itemId = target ? obs_sceneitem_get_id(target) : -1;
+		auto refresh = [summary, list, copy, scene, original, itemId]() {
+			QStringList paths;
+			const auto references = sourceReferencePaths(original.get());
+			for (const auto &reference : references) {
+				QString path = QString::fromUtf8(reference.path.c_str());
+				if (reference.indirect) path += QStringLiteral(" (via nested scene/group)");
+				paths.push_back(path);
+			}
+			paths.sort(Qt::CaseInsensitive);
+			const QString text = paths.join(QLatin1Char('\n'));
+			if (list->toPlainText() != text) list->setPlainText(text);
+			list->setFixedHeight(list->fontMetrics().lineSpacing() * static_cast<int>(std::clamp<qsizetype>(paths.size(), 1, 3)) + 12);
+			summary->setText(references.size() > 1
+				? QStringLiteral("Shared source — changes affect every reference listed.")
+				: QStringLiteral("This source is not shared."));
+			copy->setVisible(references.size() > 1);
+			obs_sceneitem_t *item = scene ? obs_scene_find_sceneitem_by_id(obs_scene_from_source(scene.get()), itemId) : nullptr;
+			const bool valid = item && obs_sceneitem_get_source(item) == original.get();
+			copy->setEnabled(valid);
+			copy->setToolTip(valid
+				? QStringLiteral("Replace only this scene's reference, then edit the independent copy. Other references keep their original settings.")
+				: QStringLiteral("Open the scene containing this preset source and select its item first. Nested scenes must be edited in their own scene."));
+		};
+		refresh();
+		auto *timer = new QTimer(group);
+		QObject::connect(timer, &QTimer::timeout, group, refresh);
+		timer->start(1000);
+		QObject::connect(copy, &QPushButton::clicked, this, [this, dialog, scene, original, itemId]() {
+			if (!dialog || !scene || itemId < 0) return;
+			auto *box = dialog->findChild<QDialogButtonBox *>();
+			auto *cancel = box ? box->button(QDialogButtonBox::Cancel) : nullptr;
+			if (!cancel) return;
+			// Snapshot the visible edits, then use OBS's real Cancel path to
+			// restore the shared source. No private OBS ABI or direct done().
+			SettingsRef settings(obs_data_create(), obs_data_release);
+			obs_data_t *current = obs_source_get_settings(original.get());
+			obs_data_apply(settings.get(), current);
+			obs_data_release(current);
+			QObject::connect(dialog, &QDialog::finished, this,
+				[this, scene, original, itemId, settings](int) {
+					QTimer::singleShot(0, this, [scene, original, itemId, settings]() {
+						completeIndependentCopy(scene, original, itemId, settings);
+					});
+				});
+			cancel->click();
+		});
+	}
 };
 QPointer<CompactPresetProperties> propertiesFilter;
 
-struct ReferenceCountContext {
-	obs_source_t *target = nullptr;
-	size_t count = 0;
-};
-
-bool countSceneReferenceItem(obs_scene_t *, obs_sceneitem_t *item, void *opaque)
-{
-	auto *context = static_cast<ReferenceCountContext *>(opaque);
-	if (obs_sceneitem_is_group(item)) {
-		if (obs_scene_t *group = obs_sceneitem_group_get_scene(item))
-			obs_scene_enum_items(group, countSceneReferenceItem, context);
-	} else if (obs_sceneitem_get_source(item) == context->target) {
-		++context->count;
-	}
-	return true;
-}
-
 size_t countSceneReferences(obs_source_t *target)
 {
-	if (!target)
-		return 0;
-
-	struct obs_frontend_source_list scenes = {};
-	obs_frontend_get_scenes(&scenes);
-	ReferenceCountContext context{target, 0};
-	for (size_t i = 0; i < scenes.sources.num; ++i) {
-		if (obs_scene_t *scene = obs_scene_from_source(scenes.sources.array[i]))
-			obs_scene_enum_items(scene, countSceneReferenceItem, &context);
-	}
-	obs_frontend_source_list_free(&scenes);
-	return context.count;
+	return sourceReferencePaths(target).size();
 }
 
 struct PresetSourceData {
@@ -159,6 +280,7 @@ struct PresetSourceData {
 	int logicalPreset = 1;
 	int triggerMode = kProgramMode;
 	int cameraIndex = 0;
+	int independentNumber = 0;
 	QString cameraName;
 	QString presetLabel;
 };
@@ -172,6 +294,8 @@ void refreshSourceName(PresetSourceData *data, bool referencedMoreThanOnce = fal
 		data->presetLabel = runtime->presets().presetLabel(runtime->activePage(), data->logicalPreset - 1);
 	}
 	QString display = makeDisplayName(*data);
+	if (data->independentNumber > 0)
+		display += QStringLiteral(" (%1)").arg(data->independentNumber);
 	if (referencedMoreThanOnce)
 		display = QStringLiteral("<span style=\"color:#FF6050;\">%1 *</span>").arg(display.toHtmlEscaped());
 	const QByteArray displayName = display.toUtf8();
@@ -240,6 +364,14 @@ QString makeDisplayName(const PresetSourceData &data)
 	return QStringLiteral("Move %1 to %2").arg(camera, preset);
 }
 
+QString independentBaseName(obs_source_t *source)
+{
+	std::lock_guard<std::mutex> lock(liveSourcesMutex);
+	for (auto *data : liveSources)
+		if (data->source == source) return makeDisplayName(*data);
+	return QStringLiteral("SimpleCam Preset");
+}
+
 void sourceUpdate(void *opaque, obs_data_t *settings)
 {
 	auto *data = static_cast<PresetSourceData *>(opaque);
@@ -247,6 +379,7 @@ void sourceUpdate(void *opaque, obs_data_t *settings)
 		return;
 	std::lock_guard<std::mutex> lock(liveSourcesMutex);
 	data->logicalPreset = static_cast<int>(std::clamp<std::int64_t>(obs_data_get_int(settings, "preset"), 1, 14));
+	data->independentNumber = static_cast<int>(std::clamp<std::int64_t>(obs_data_get_int(settings, kCopyNumber), 0, 99999));
 	data->triggerMode = static_cast<int>(std::clamp<std::int64_t>(obs_data_get_int(settings, "trigger_mode"), 0, 2));
 	const char *camera = obs_data_get_string(settings, "camera");
 	data->cameraIndex = cameraIndexFromValue(camera);
@@ -327,7 +460,9 @@ obs_properties_t *sourceProperties(void *opaque)
 		obs_property_list_add_string(camera, label.constData(), value.constData());
 	}
 	obs_property_set_modified_callback(camera, cameraSelectionChanged);
-	obs_property_set_long_description(camera, kPropertiesMarker);
+	const QByteArray marker = (QString::fromUtf8(kPropertiesMarker) + QLatin1Char('\n') +
+		QString::fromUtf8(sourceData ? obs_source_get_uuid(sourceData->source) : "")).toUtf8();
+	obs_property_set_long_description(camera, marker.constData());
 
 	auto *preset = obs_properties_add_list(properties, "preset", sourceText("SimpleCamPTZ.Preset", "Preset"),
 						OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_INT);
