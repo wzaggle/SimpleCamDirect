@@ -229,7 +229,7 @@ def main():
     extra = ['-DCMAKE_PREFIX_PATH=' + ';'.join(map(str, prefixes))] if prefixes else []
     run('cmake', '--preset', preset, *extra)
     build = ROOT / 'out/build' / ('simplecamptz-' + preset)
-    # r21: shared-source detachment and stable independent numbered identities.
+    # r22: Windows-first adaptive sharing UI; retain all six regression suites.
     targets = ['simplecamptz', 'simplecamptz_packet_tests', 'simplecamptz_profile_tests',
                'simplecamptz_runtime_state_tests', 'simplecamptz_camera_concurrency_tests',
                'simplecamptz_program_output_tests', 'simplecamptz_source_reference_tests']

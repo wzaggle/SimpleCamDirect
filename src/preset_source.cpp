@@ -216,6 +216,13 @@ private:
 		const int target = std::min(screenLimit, std::max(guard->minimumSizeHint().height(),
 			baseHeight + sectionHeight + (sharing->isShared() ? 12 : 0)));
 		guard->resize(guard->width(), target);
+		if (screen) {
+			const QRect available = screen->availableGeometry().adjusted(0, 12, 0, -12);
+			const QRect frame = guard->frameGeometry();
+			const int top = std::clamp(frame.top(), available.top(),
+				std::max(available.top(), available.bottom() - frame.height() + 1));
+			if (top != frame.top()) guard->move(guard->pos() + QPoint(0, top - frame.top()));
+		}
 	}
 
 	void addSharingControls(QPointer<QDialog> dialog, QWidget *container,
