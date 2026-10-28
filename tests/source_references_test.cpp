@@ -32,6 +32,17 @@ int main()
 	obs_scene_t *first = obs_scene_create("First scene");
 	obs_scene_t *second = obs_scene_create("Second scene");
 	obs_scene_t *parent = obs_scene_create("Parent scene");
+	// No graphics device runs in this fixture. Give each scene a real canvas
+	// size before adding items: relative transforms otherwise divide by zero.
+	for (obs_scene_t *scene : {first, second, parent}) {
+		obs_source_t *sceneSource = obs_scene_get_source(scene);
+		obs_data_t *sceneSettings = obs_source_get_settings(sceneSource);
+		obs_data_set_bool(sceneSettings, "custom_size", true);
+		obs_data_set_int(sceneSettings, "cx", 1920);
+		obs_data_set_int(sceneSettings, "cy", 1080);
+		obs_data_release(sceneSettings);
+		obs_source_load(sceneSource);
+	}
 	obs_scene_add(first, other);
 	obs_sceneitem_t *oldItem = obs_scene_add(first, source);
 	obs_scene_add(first, other);
@@ -55,6 +66,8 @@ int main()
 	transform.pos.x = 19.0f;
 	transform.pos.y = 23.0f;
 	obs_sceneitem_set_info2(oldItem, &transform);
+	obs_sceneitem_get_info2(oldItem, &transform);
+	check(transform.pos.x == 19.0f && transform.pos.y == 23.0f, "Fixture has valid pixel coordinates before replacement");
 	obs_sceneitem_crop crop{1, 2, 3, 4};
 	obs_sceneitem_set_crop(oldItem, &crop);
 	const int order = obs_sceneitem_get_order_position(oldItem);
