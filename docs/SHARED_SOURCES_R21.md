@@ -65,3 +65,25 @@ Operator checklist:
    retarget it. A removed target cannot remove another reference.
 6. Inspect nested paths and ambiguous occurrences. Verify disabled-button help.
 7. Recheck compact sizing, camera controls and source triggers on all platforms.
+
+## Native build evidence
+
+Compiled revision: `1d1c70414dbe375239cbbe52561b4b5a4dc108f7`.
+Run: https://github.com/wzaggle/SimpleCamDirect/actions/runs/40637641274
+
+Windows x64, macOS arm64 and Ubuntu 24.04 x64 all compiled the plugin and passed
+all six CTest suites (18 successful suite executions). This includes the new
+real-libobs source-reference/replacement suite and all five existing suites.
+Platform installers and the same-revision combined collector succeeded. This
+does not establish live OBS Properties UI or real-camera acceptance.
+
+An earlier fixture failed its transform check because a headless scene had zero
+canvas height. It now uses the public scene settings/load API to establish a
+1920x1080 canvas before adding items and verifies valid starting coordinates.
+The production replacement implementation did not need a transform change.
+
+Combined artifact: `12793374658`, 5,776,852 bytes.
+SHA-256: `c60d1f3b612652fe0c00d6b8486af770d39f63b0f52983fa1edc953b53fdd321`.
+Windows artifact: `12794895030`; macOS: `12793937704`; Linux: `12794391580`.
+The source overlay is cumulative over r18, includes r19/r20 support changes and
+uses Denver local ZIP entry timestamps for the existing MSBuild overlay workflow.

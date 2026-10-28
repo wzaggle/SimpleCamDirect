@@ -1,5 +1,14 @@
 # Tested checkpoints
 
+## r21 shared sources — automated validation; operator acceptance pending
+
+Source `1d1c70414dbe375239cbbe52561b4b5a4dc108f7`, run 40637641274:
+Windows x64, macOS arm64 and Ubuntu 24.04 x64 each pass all six automated suites;
+all installers and the same-source combined collector succeed. Properties now
+lists exact-source scene paths and offers a captured-item independent copy with
+a new numbered identity. See SHARED_SOURCES_R21.md for boundaries and the live
+OBS test checklist. This is not a MARK IT production acceptance checkpoint.
+
 ## 2026-10-24 — MARK IT: responsive Controls Dock through r9
 
 ### Accepted changes
