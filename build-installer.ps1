@@ -65,5 +65,6 @@ if ($LASTEXITCODE -ne 0) {
     throw "Inno Setup failed with exit code $LASTEXITCODE."
 }
 
-$installerPath = Join-Path $projectRoot "dist\SimpleCamPTZ-Setup-0.1.0-x64.exe"
+$pluginVersion = (Get-Content (Join-Path $projectRoot "buildspec.json") -Raw | ConvertFrom-Json).version
+$installerPath = Join-Path $projectRoot "dist\SimpleCamPTZ-Setup-$pluginVersion-x64.exe"
 Write-Output "Installer created: $installerPath"

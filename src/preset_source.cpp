@@ -3,6 +3,8 @@
 #include "camera_runtime.hpp"
 #include "source_references.hpp"
 #include "sharing_section.hpp"
+#include "preset_properties_title.hpp"
+#include "preset_name_allocator.hpp"
 
 #include <plugin-support.h>
 
@@ -29,7 +31,6 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 #include <QMessageBox>
-#include <QRegularExpression>
 #include <QScreen>
 
 #include <algorithm>
@@ -79,7 +80,8 @@ const char *sourceText(const char *key, const char *fallback)
 constexpr char kPropertiesMarker[] = "Select the camera for this SimpleCamPTZ preset source.";
 constexpr char kCopyNumber[] = "simplecam_independent_number";
 
-QString independentBaseName(obs_source_t *source, int &nextNumber);
+QString presetRequestBase(obs_data_t *settings);
+PresetNameReservations presetNameReservations(const QString &base, obs_source_t *excluded);
 
 using SourceRef = std::shared_ptr<obs_source_t>;
 using SettingsRef = std::shared_ptr<obs_data_t>;
@@ -101,22 +103,15 @@ void completeIndependentCopy(const SourceRef &scene, const SourceRef &original, 
 	const bool sceneStillExists = registeredScene == scene.get();
 	obs_source_release(registeredScene);
 	if (!sceneStillExists || obs_source_removed(original.get())) return;
-	int number = 2;
-	const QString base = independentBaseName(original.get(), number);
-	QString name;
-	for (; number < 100000; ++number) {
-		name = QStringLiteral("%1 (%2)").arg(base).arg(number);
-		const QByteArray plain = name.toUtf8();
-		const QByteArray shared = QStringLiteral("<span style=\"color:#FF6050;\">%1 *</span>")
-			.arg(name.toHtmlEscaped()).toUtf8();
-		obs_source_t *a = obs_get_source_by_name(plain.constData());
-		obs_source_t *b = obs_get_source_by_name(shared.constData());
-		const bool taken = a || b;
-		obs_source_release(a);
-		obs_source_release(b);
-		if (!taken) break;
+	const QString base = presetRequestBase(settings.get());
+	int number;
+	{
+		std::lock_guard<std::mutex> lock(liveSourcesMutex);
+		// The original identity continues to occupy its number after detaching.
+		number = presetNameReservations(base, nullptr).lowestUnused(true);
 	}
-	if (number == 100000) return;
+	if (number < 0) return;
+	const QString name = QStringLiteral("%1 (%2)").arg(base).arg(number);
 	obs_data_set_int(settings.get(), kCopyNumber, number);
 	const QByteArray utf8 = name.toUtf8();
 	obs_source_t *copy = replaceWithIndependentSource(obs_scene_from_source(scene.get()), itemId,
@@ -146,6 +141,11 @@ public:
 protected:
 	bool eventFilter(QObject *watched, QEvent *event) override
 	{
+		if (event->type() == QEvent::WindowTitleChange && watched->inherits("OBSBasicProperties")) {
+			if (auto *dialog = qobject_cast<QDialog *>(watched))
+				if (dialog->property("simplecamptzPlainPropertiesTitle").toBool()) cleanTitle(dialog);
+			return false;
+		}
 		if (event->type() != QEvent::Show || !watched->inherits("OBSBasicProperties"))
 			return false;
 		auto *dialog = qobject_cast<QDialog *>(watched);
@@ -159,6 +159,16 @@ protected:
 		return false;
 	}
 private:
+	bool cleaningTitle_ = false;
+	void cleanTitle(QDialog *dialog)
+	{
+		if (cleaningTitle_) return;
+		const QString plain = plainPresetPropertiesTitle(dialog->windowTitle());
+		if (plain == dialog->windowTitle()) return;
+		cleaningTitle_ = true;
+		dialog->setWindowTitle(plain);
+		cleaningTitle_ = false;
+	}
 	std::vector<QPointer<QWidget>> sharingWidgets_;
 	void probe(QPointer<QDialog> guard, int attempt, const SourceRef &scene)
 	{
@@ -176,6 +186,8 @@ private:
 		}
 		SourceRef original = ownSource(obs_get_source_by_uuid(sourceUuid.toUtf8().constData()));
 		if (!original || std::strcmp(obs_source_get_id(original.get()), kSourceId) != 0) return;
+		guard->setProperty("simplecamptzPlainPropertiesTitle", true);
+		cleanTitle(guard.data());
 		addSharingControls(guard, container, scene, original);
 	}
 
@@ -185,6 +197,19 @@ private:
 		if (!guard || !container || !sharing || !guard->isVisible()) return;
 		auto *splitter = guard->findChild<QSplitter *>(QStringLiteral("windowSplitter"));
 		if (!splitter || !container->layout()) return;
+		QScreen *screen = guard->screen();
+		// Set the requested opening width once. Later scene-list updates must
+		// not undo an operator's manual resize, and unshared dialogs keep the
+		// width supplied by OBS.
+		if (!guard->property("simplecamptzInitialWidthApplied").toBool()) {
+			guard->setProperty("simplecamptzInitialWidthApplied", true);
+			if (sharing->isShared()) {
+				const int frameWidth = std::max(0, guard->frameGeometry().width() - guard->width());
+				const int widthLimit = screen ? std::max(1, screen->availableGeometry().width() - frameWidth - 24) : 610;
+				guard->resize(std::min(610, widthLimit), guard->height());
+				if (guard->layout()) guard->layout()->activate();
+			}
+		}
 		splitter->setMinimumHeight(0);
 		if (QWidget *preview = guard->findChild<QWidget *>(QStringLiteral("previewFrame"))) preview->hide();
 		// Measure the established compact form without the optional section.
@@ -194,7 +219,6 @@ private:
 		auto *buttons = guard->findChild<QDialogButtonBox *>();
 		const int footer = buttons ? buttons->sizeHint().height() : 36;
 		const int baseHeight = std::max(280, baseFormHeight + footer + 56);
-		QScreen *screen = guard->screen();
 		const int frameHeight = std::max(0, guard->frameGeometry().height() - guard->height());
 		const int screenLimit = screen ? std::max(1, screen->availableGeometry().height() - frameHeight - 24) : 900;
 		sharing->setVisible(sharing->isShared());
@@ -217,11 +241,14 @@ private:
 			baseHeight + sectionHeight + (sharing->isShared() ? 12 : 0)));
 		guard->resize(guard->width(), target);
 		if (screen) {
-			const QRect available = screen->availableGeometry().adjusted(0, 12, 0, -12);
+			const QRect available = screen->availableGeometry().adjusted(12, 12, -12, -12);
 			const QRect frame = guard->frameGeometry();
+			const int left = std::clamp(frame.left(), available.left(),
+				std::max(available.left(), available.right() - frame.width() + 1));
 			const int top = std::clamp(frame.top(), available.top(),
 				std::max(available.top(), available.bottom() - frame.height() + 1));
-			if (top != frame.top()) guard->move(guard->pos() + QPoint(0, top - frame.top()));
+			if (left != frame.left() || top != frame.top())
+				guard->move(guard->pos() + QPoint(left - frame.left(), top - frame.top()));
 		}
 	}
 
@@ -241,13 +268,16 @@ private:
 		auto refresh = [this, dialog, containerGuard, sharing, copy, scene, original, itemId]() {
 			QStringList paths;
 			const auto references = sourceReferencePaths(original.get());
+			const std::string editingSceneUuid = scene ? obs_source_get_uuid(scene.get()) : "";
 			for (const auto &reference : references) {
+				if (reference.rootSceneUuid == editingSceneUuid) continue;
 				QString path = QString::fromUtf8(reference.path.c_str());
 				if (reference.indirect) path += QStringLiteral(" (via nested scene/group)");
 				paths.push_back(path);
 			}
 			paths.sort(Qt::CaseInsensitive);
-			if (sharing->setSceneNames(paths))
+			paths.removeDuplicates();
+			if (sharing->setSceneNames(paths, references.size() > 1))
 				QTimer::singleShot(0, this, [this, dialog, containerGuard, sharing]() {
 					fitProperties(dialog, containerGuard, sharing);
 				});
@@ -303,11 +333,13 @@ struct PresetSourceData {
 	int triggerMode = kProgramMode;
 	int cameraIndex = 0;
 	int independentNumber = 0;
+	bool newIdentity = true;
+	bool initialNamePending = true;
 	QString cameraName;
 	QString presetLabel;
 };
 
-void refreshSourceName(PresetSourceData *data, bool referencedMoreThanOnce = false)
+void refreshSourceName(PresetSourceData *data, bool referencedMoreThanOnce = false, bool allocateIdentity = false)
 {
 	if (!data || !data->source)
 		return;
@@ -316,6 +348,20 @@ void refreshSourceName(PresetSourceData *data, bool referencedMoreThanOnce = fal
 		data->presetLabel = runtime->presets().presetLabel(runtime->activePage(), data->logicalPreset - 1);
 	}
 	QString display = makeDisplayName(*data);
+	// Loaded sources retain their identity. A new unnumbered source may still
+	// need a suffix after the operator selects its camera/preset in Properties.
+	if (allocateIdentity && data->newIdentity && (data->initialNamePending || data->independentNumber == 0)) {
+		const auto reserved = presetNameReservations(display, data->source);
+		if (reserved.occupied(data->independentNumber)) {
+			const int number = reserved.lowestUnused(true);
+			if (number < 0) return;
+			data->independentNumber = number;
+			obs_data_t *settings = obs_source_get_settings(data->source);
+			obs_data_set_int(settings, kCopyNumber, number);
+			obs_data_release(settings);
+		}
+	}
+	if (allocateIdentity) data->initialNamePending = false;
 	if (data->independentNumber > 0)
 		display += QStringLiteral(" (%1)").arg(data->independentNumber);
 	if (referencedMoreThanOnce)
@@ -347,7 +393,10 @@ void scheduleSourceNameRefreshAfterCreate(PresetSourceData *data)
 	const bool queued = QMetaObject::invokeMethod(
 		application,
 		[rename]() {
-			refreshSourceName(rename->data);
+			{
+				std::lock_guard<std::mutex> lock(liveSourcesMutex);
+				refreshSourceName(rename->data, countSceneReferences(rename->source) > 1, true);
+			}
 			obs_source_release(rename->source);
 			delete rename;
 		},
@@ -386,23 +435,57 @@ QString makeDisplayName(const PresetSourceData &data)
 	return QStringLiteral("Move %1 to %2").arg(camera, preset);
 }
 
-QString independentBaseName(obs_source_t *source, int &nextNumber)
+QString presetRequestBase(obs_data_t *settings)
+{
+	PresetSourceData data;
+	data.cameraIndex = cameraIndexFromValue(obs_data_get_string(settings, "camera"));
+	data.logicalPreset = static_cast<int>(std::clamp<std::int64_t>(obs_data_get_int(settings, "preset"), 1, 14));
+	if (CameraRuntime *runtime = cameraRuntime(data.cameraIndex)) {
+		data.cameraName = runtime->cameraName();
+		data.presetLabel = runtime->presets().presetLabel(runtime->activePage(), data.logicalPreset - 1);
+	} else {
+		data.cameraName = QStringLiteral("Camera %1").arg(data.cameraIndex + 1);
+	}
+	return makeDisplayName(data);
+}
+
+// Caller holds liveSourcesMutex. One live entry is one source identity,
+// irrespective of how many scene references use it. Reserve pending sources
+// before their queued rename, plus actual names (including legacy suffixes).
+PresetNameReservations presetNameReservations(const QString &base, obs_source_t *excluded)
+{
+	PresetNameReservations reserved(base.toStdString());
+	for (auto *data : liveSources) {
+		if (data->source == excluded || obs_source_removed(data->source)) continue;
+		reserved.reserveIdentity(makeDisplayName(*data).toStdString(), data->independentNumber);
+		reserved.reserveName(obs_source_get_name(data->source));
+	}
+	struct Scan { PresetNameReservations *reserved; obs_source_t *excluded; } scan{&reserved, excluded};
+	obs_enum_sources([](void *opaque, obs_source_t *source) {
+		auto &scan = *static_cast<Scan *>(opaque);
+		if (source != scan.excluded && !obs_source_removed(source))
+			scan.reserved->reserveName(obs_source_get_name(source));
+		return true;
+	}, &scan);
+	return reserved;
+}
+
+void sourceLoad(void *opaque, obs_data_t *settings)
 {
 	std::lock_guard<std::mutex> lock(liveSourcesMutex);
-	QString base = QStringLiteral("SimpleCam Preset");
-	for (auto *data : liveSources)
-		if (data->source == source) base = makeDisplayName(*data);
-	// Also reserve legacy OBS-generated suffixes. A shared source's suffix
-	// may follow </span>; checking only plain candidate names would miss it.
-	const QRegularExpression suffix(QStringLiteral(R"( \((\d+)\)$)"));
-	for (auto *data : liveSources) {
-		if (makeDisplayName(*data) != base) continue;
-		nextNumber = std::max(nextNumber, data->independentNumber + 1);
-		const auto match = suffix.match(QString::fromUtf8(obs_source_get_name(data->source)));
-		if (match.hasMatch())
-			nextNumber = std::max(nextNumber, std::min(match.captured(1).toInt(), 99999) + 1);
+	auto *data = static_cast<PresetSourceData *>(opaque);
+	data->newIdentity = false;
+	// Preserve legacy OBS-assigned numbers, including suffixes outside orange
+	// markup, rather than losing them during automatic source-name refresh.
+	if (data->independentNumber == 0) {
+		const std::string name = plainPresetSourceName(obs_source_get_name(data->source));
+		const size_t suffix = name.rfind(" (");
+		const int number = suffix == std::string::npos ? -1 : presetSourceNumber(name.substr(0, suffix), name);
+		if (number > 0) {
+			data->independentNumber = number;
+			obs_data_set_int(settings, kCopyNumber, number);
+		}
 	}
-	return base;
 }
 
 void sourceUpdate(void *opaque, obs_data_t *settings)
@@ -425,7 +508,7 @@ void sourceUpdate(void *opaque, obs_data_t *settings)
 		data->presetLabel.clear();
 	}
 	if (!data->initializing)
-		refreshSourceName(data, countSceneReferences(data->source) > 1);
+		refreshSourceName(data, countSceneReferences(data->source) > 1, true);
 }
 
 void sourceDestroy(void *opaque)
@@ -571,6 +654,7 @@ void registerPresetSource()
 	info.create = sourceCreate;
 	info.destroy = sourceDestroy;
 	info.update = sourceUpdate;
+	info.load = sourceLoad;
 	info.get_defaults = sourceDefaults;
 	info.get_properties = sourceProperties;
 	obs_register_source(&info);

@@ -56,3 +56,10 @@ Ctrl+Clear remains selected-camera/current-group only; Ctrl+Alt+Clear clears
 that group on all camera slots after confirmation. On Mac use Command and
 Command+Option. A nonempty extra group's Delete action offers Clear All and
 Delete or Cancel. The first five groups remain protected. See GROUP_CLEAR_R16.md.
+
+## v0.1.8 numbering update (operator validation pending)
+
+New preset sources needing numbers and Make independent copy reuse the lowest
+free suffix, starting at (2), within the same preset-request name. References to
+one source keep one identity, and orange names still occupy their numbers.
+Existing identities are not compacted. See PRESET_SUFFIX_018.md.

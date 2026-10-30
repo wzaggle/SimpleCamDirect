@@ -12,6 +12,7 @@ namespace simplecam {
 struct SourceReferencePath {
 	std::string path;
 	bool indirect = false;
+	std::string rootSceneUuid;
 };
 
 inline std::vector<SourceReferencePath> sourceReferencePaths(obs_source_t *target)
@@ -22,12 +23,13 @@ inline std::vector<SourceReferencePath> sourceReferencePaths(obs_source_t *targe
 		std::vector<obs_scene_t *> ancestors;
 		std::string path;
 		bool indirect = false;
+		std::string rootSceneUuid;
 		static bool item(obs_scene_t *, obs_sceneitem_t *entry, void *opaque)
 		{
 			auto &walk = *static_cast<Walk *>(opaque);
 			obs_source_t *source = obs_sceneitem_get_source(entry);
 			if (source == walk.target)
-				walk.result.push_back({walk.path, walk.indirect});
+				walk.result.push_back({walk.path, walk.indirect, walk.rootSceneUuid});
 			obs_scene_t *child = obs_sceneitem_is_group(entry) ? obs_sceneitem_group_get_scene(entry)
 								    : obs_scene_from_source(source);
 			if (!child || walk.ancestors.size() >= 64 ||
@@ -51,13 +53,14 @@ inline std::vector<SourceReferencePath> sourceReferencePaths(obs_source_t *targe
 			obs_scene_t *scene = obs_scene_from_source(source);
 			if (!scene) return true;
 			walk.path = obs_source_get_name(source);
+			walk.rootSceneUuid = obs_source_get_uuid(source);
 			walk.indirect = false;
 			walk.ancestors = {scene};
 			obs_scene_enum_items(scene, item, &walk);
 			return true;
 		}
 	};
-	Walk walk{target, {}, {}, {}, false};
+	Walk walk{target, {}, {}, {}, false, {}};
 	if (target) obs_enum_scenes(Walk::scene, &walk);
 	return walk.result;
 }

@@ -35,3 +35,25 @@ Windows operator checks:
 
 After Windows acceptance, restore ci/push-platform.txt to all and validate the
 same source on macOS arm64 and Ubuntu. No cross-platform package claim yet.
+
+## v0.1.1 local Visual Studio overlay
+
+Maintainer requests source overlays and local Windows builds for the next
+iterations. No additional cloud build is requested for this overlay. The adaptive
+Properties code at a21b536d363aff4fd99b1a055642e1ad11734d4b passed all six native
+Windows suites in run 40644194470; the subsequent version/ON-AIR instrumentation
+passes local GCC syntax checks only and still needs the maintainer's VS build.
+
+The dock title now reads the compiled PLUGIN_VERSION, starting at v0.1.1.
+CMake tracks buildspec.json so later patch increments trigger reconfiguration.
+Keep the installer script version consistent even when sending source only.
+
+ON-AIR behavior is NOT declared fixed. Passive OnAirDiag v0.1.1 logs record
+actual output/Program, frontend Program and Preview source identity, camera
+matches and their parent scene UUIDs. Only actual Program selects the indicator;
+the extra Preview scan is diagnostic. Logs emit only when that state changes.
+
+To capture: start OBS; transition the working scene to Program; reorder/change
+the top camera in Preview without transitioning; then transition. Send the
+current OBS log containing [SimpleCamPTZ OnAirDiag v0.1.1] lines. This distinguishes
+root-scene identity from shared nested-scene changes without guessing a fix.

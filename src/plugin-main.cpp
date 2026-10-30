@@ -25,13 +25,12 @@
 #include <QWidget>
 
 #include <array>
+#include <atomic>
 
 OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE(PLUGIN_NAME, "en-US")
 
 namespace {
-
-constexpr char kCameraControlDockTitle[] = "SimpleCamPTZ v0.1.0";
 
 simplecam::CameraRuntimeArray runtimes{};
 QWidget *cameraControlWidget = nullptr;
@@ -42,6 +41,17 @@ QPointer<QTimer> sourceNameRefreshTimer;
 QString builtInProfilePath;
 QString builtInProfileDirectory;
 QString userProfileDirectory;
+std::atomic<uint64_t> programTransitionGeneration{0};
+
+void onOutputTransitionSignal(void *, calldata_t *data)
+{
+	// May run on OBS's audio/render thread. Never touch Qt or camera I/O here.
+	auto *source = static_cast<obs_source_t *>(calldata_ptr(data, "source"));
+	obs_source_t *output = obs_get_output_source(0);
+	if (source && source == output)
+		programTransitionGeneration.fetch_add(1, std::memory_order_relaxed);
+	obs_source_release(output);
+}
 
 QString userProfilesPath()
 {
@@ -103,6 +113,25 @@ void onFrontendEvent(enum obs_frontend_event event, void *)
 		if (!runtime)
 			return;
 	}
+	if (cameraControlDock) {
+		switch (event) {
+		case OBS_FRONTEND_EVENT_FINISHED_LOADING:
+		case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGED:
+			cameraControlDock->initializeOnAirTracking();
+			break;
+		case OBS_FRONTEND_EVENT_SCENE_CHANGED:
+		case OBS_FRONTEND_EVENT_TRANSITION_STOPPED:
+		case OBS_FRONTEND_EVENT_STUDIO_MODE_ENABLED:
+		case OBS_FRONTEND_EVENT_STUDIO_MODE_DISABLED:
+			cameraControlDock->requestOnAirSnapshot();
+			break;
+		case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CLEANUP:
+			cameraControlDock->clearOnAirTracking();
+			break;
+		default:
+			break; // PREVIEW_SCENE_CHANGED must never release the held camera.
+		}
+	}
 	if (event == OBS_FRONTEND_EVENT_SCENE_CHANGED) {
 		obs_source_t *scene = obs_frontend_get_current_scene();
 		const int trigger = obs_frontend_preview_program_mode_active() ? 0 : 3;
@@ -145,9 +174,16 @@ void onFrontendEvent(enum obs_frontend_event event, void *)
 
 namespace simplecam {
 
-obs_source_t *currentProgramSceneSource()
+uint64_t currentProgramTransitionGeneration()
 {
-	return acquireProgramOutputScene();
+	return programTransitionGeneration.load(std::memory_order_relaxed);
+}
+
+obs_source_t *currentProgramSceneSource(bool studio)
+{
+	// Studio inspects the scene held by the real output transition. Outside
+	// Studio the standard current frontend scene is the operator's live scene.
+	return studio ? acquireProgramOutputScene() : obs_frontend_get_current_scene();
 }
 
 } // namespace simplecam
@@ -184,7 +220,8 @@ bool obs_module_load(void)
 
 	cameraControlDock = new simplecam::CameraControlDock(runtimes);
 	cameraControlWidget = cameraControlDock;
-	const bool controlAdded = obs_frontend_add_dock_by_id("simplecamdirect.camera-control", kCameraControlDockTitle, cameraControlWidget);
+	const QByteArray dockTitle = QStringLiteral("SimpleCamPTZ v%1").arg(QString::fromUtf8(PLUGIN_VERSION)).toUtf8();
+	const bool controlAdded = obs_frontend_add_dock_by_id("simplecamdirect.camera-control", dockTitle.constData(), cameraControlWidget);
 	if (!controlAdded) {
 		obs_log(LOG_ERROR, "SimpleCamPTZ could not add its OBS dock widgets");
 		if (controlAdded)
@@ -210,6 +247,9 @@ bool obs_module_load(void)
 	obs_frontend_add_tools_menu_item("SimpleCamPTZ Profile Test", openProfileTestTool, nullptr);
 	obs_frontend_add_tools_menu_item("SimpleCamPTZ Cameras", openCamerasTool, nullptr);
 	obs_frontend_add_event_callback(onFrontendEvent, nullptr);
+	signal_handler_connect(obs_get_signal_handler(), "source_transition_start", onOutputTransitionSignal, nullptr);
+	signal_handler_connect(obs_get_signal_handler(), "source_transition_video_stop", onOutputTransitionSignal, nullptr);
+	signal_handler_connect(obs_get_signal_handler(), "source_transition_stop", onOutputTransitionSignal, nullptr);
 	sourceNameRefreshTimer = new QTimer(cameraControlWidget);
 	sourceNameRefreshTimer->setInterval(1000);
 	QObject::connect(sourceNameRefreshTimer.data(), &QTimer::timeout,
@@ -221,6 +261,9 @@ bool obs_module_load(void)
 
 void obs_module_unload(void)
 {
+	signal_handler_disconnect(obs_get_signal_handler(), "source_transition_start", onOutputTransitionSignal, nullptr);
+	signal_handler_disconnect(obs_get_signal_handler(), "source_transition_video_stop", onOutputTransitionSignal, nullptr);
+	signal_handler_disconnect(obs_get_signal_handler(), "source_transition_stop", onOutputTransitionSignal, nullptr);
 	simplecam::shutdownPresetSourceUi();
 #ifdef Q_OS_MACOS
 	simplecam::shutdownMacDockSupport();

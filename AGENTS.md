@@ -1,5 +1,81 @@
 # Instructions for coding agents
 
+## Lowest unused preset suffix (v0.1.8; local VS/OBS validation pending)
+
+New preset sources needing a suffix and Make independent copy share the gap-filling
+allocator in preset_name_allocator.hpp. Start at (2); reserve stored identities,
+plain names, orange names and legacy suffixes outside markup. References to one
+source do not consume extra numbers. Never compact existing source numbers.
+Global sharing/name refreshes do not allocate numbers. Loaded sources retain
+their stored number; preserve legacy OBS suffixes on load. The copy action uses
+its captured edited settings to choose the naming family. Preserve v0.1.7 title
+cleanup, accepted ON-AIR, shared layout/610px width and camera IO.
+27 allocator and 29 ON-AIR checks pass locally with GCC; full Qt/OBS compilation
+and native VS/OBS acceptance are not run in this environment. Source overlay
+only, Denver entry timestamps; no GitHub write until MARK IT, no cloud jobs.
+See docs/PRESET_SUFFIX_018.md.
+
+## Plain Properties title (v0.1.7)
+
+After identifying our source Properties by marker/UUID, clean only the dialog
+windowTitle, including subsequent WindowTitleChange events. Strip our generated
+orange span and shared marker, decode escaped display characters once, retain
+source numbers and localized host prefix. Guard reentrant title events. Never
+rename the actual source or alter its orange marking for this display fix.
+Keep accepted ON-AIR, sharing controls and 610px opening width unchanged.
+Eight local title tests and source syntax checks pass; native VS/OBS check pending.
+Local overlay only, no cloud build. See docs/PRESET_TITLE_017.md.
+
+## Shared Properties opening width (v0.1.6)
+
+Maintainer selected 610px initial client width for shared-source Properties.
+Apply once per identified dialog, cap to available screen width, keep manual
+resizing and leave unshared opening width to OBS. Preserve adaptive height and
+accepted ON-AIR code. Local source overlay/VS only; no cloud jobs.
+
+## Preset sharing caption (v0.1.5)
+
+Maintainer confirms v0.1.4 ON-AIR works in all tested modes. Preserve its
+implementation unchanged. Preset Properties now uses the independent-copy
+button as the list heading, with no separate title. Exclude the captured
+editing scene by root scene UUID from display only. Actual sharing detection
+and replacement guards still count every reference. A single other scene
+must keep the section visible; no other scene names can also mean repeated
+references within the editing scene, so retain the button in that edge case.
+Keep adaptive height and borderless scrolling. See docs/PRESET_LIST_015.md.
+Local VS overlay only; do not trigger cloud builds.
+
+## Current mode-specific tree (v0.1.4; local Windows validation pending)
+
+Read docs/ON_AIR_MODE_014.md. Studio uses actual output transition/Program tree;
+non-Studio uses obs_frontend_get_current_scene(). ON-AIR must not acquire or
+enumerate Preview, including diagnostic scans. Preserve the v0.1.3 held-state
+and same-scene commit detection. Other Preview preset-source functionality is
+unchanged. Local policy tests: 29 checks pass; GCC/Qt syntax checks pass.
+Send source overlays for local VS; do not start cloud builds.
+
+## Same-scene commits (v0.1.3; operator test pending)
+
+Read docs/ON_AIR_SAME_SCENE_013.md. Observe channel-0 transition signals using
+an atomic generation only; never access Qt/camera IO in those callbacks. Observe
+actual Program source identity and transition falling edges so unchanged scene
+names still refresh the held indication. OBS 32 no-op GUI Transition/quick-button
+clicks also request a snapshot through narrowly identified Studio controls.
+Preserve outgoing until settled; Preview edits alone must not release the latch.
+Independent-copy button now precedes scene names. Source overlays/local VS only;
+no cloud jobs. Dock/build metadata is v0.1.3. Tests: 29 policy, 13 widget checks
+pass locally; native VS/OBS acceptance remains pending.
+
+## Current ON-AIR policy (v0.1.2; Windows operator test pending)
+
+Read docs/ON_AIR_STUDIO_012.md. Studio Mode holds the startup/last completed
+Program camera despite Preview edits; non-Studio Mode follows live state.
+Mode switches and scene-collection initialization request a fresh snapshot.
+Do not capture while the libobs output transition is active. Preview events
+never request snapshots. The camera action dispatch path remains unchanged.
+Local policy test passes 20 checks; plugin syntax passes GCC/Qt checks.
+Maintainer builds in Visual Studio; do not trigger cloud jobs.
+
 ## Adaptive sharing section (r22)
 
 Read docs/SHARED_PROPERTIES_R22.md. Maintainer passed the independent-copy
@@ -201,3 +277,12 @@ Native libobs regression covers editable/private scene separation. Restore
 all-platform CI for this shared change. Live Studio Mode acceptance is pending.
 Linux drag lock reproduces with plugin disabled; xcb launch repairs it locally.
 Do not keep changing SimpleCam geometry to fix that host/session interaction.
+
+## Local iteration workflow (v0.1.1)
+
+Maintainer now requests source overlays and local Windows VS builds for these
+iterations. Do not launch further cloud/platform jobs until requested. Increment
+the final component of the displayed version for each delivered iteration, using
+buildspec.json as the compiled dock-title version and matching installer metadata.
+v0.1.1 adds passive OnAirDiag evidence; Preview-sensitive ON-AIR remains unresolved.
+See SHARED_PROPERTIES_R22.md.

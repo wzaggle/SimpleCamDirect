@@ -1,6 +1,7 @@
 #pragma once
 
 #include "camera_runtime.hpp"
+#include "on_air_policy.hpp"
 
 #include <QDialog>
 #include <QPointer>
@@ -12,6 +13,7 @@
 #include <array>
 
 class QDockWidget;
+class QAbstractButton;
 class QShowEvent;
 class QCheckBox;
 class QComboBox;
@@ -120,6 +122,9 @@ class CameraControlDock final : public QWidget {
 public:
 	CameraControlDock(const CameraRuntimeArray &runtimes, QWidget *parent = nullptr);
 	void refreshView();
+	void initializeOnAirTracking();
+	void requestOnAirSnapshot();
+	void clearOnAirTracking();
 	QSize sizeHint() const override;
 	QSize minimumSizeHint() const override;
 
@@ -128,6 +133,7 @@ private:
 	void normalizeCameraAssignments();
 	int enabledCameraCount() const;
 	void refreshOnAirCamera();
+	void bindProgramCommitButtons();
 	void updateSharedGroupIndicator();
 	void positionSharedGroupIndicator();
 	void bindZoomObservers();
@@ -165,6 +171,9 @@ private:
 	int layoutTransitionSequence_ = 0;
 	int resizeRequestSequence_ = 0;
 	QTimer *onAirRefreshTimer_ = nullptr;
+	QString onAirDiagnosticState_;
+	OnAirPolicy onAirPolicy_;
+	QList<QPointer<QAbstractButton>> programCommitButtons_;
 };
 
 class CamerasTool final : public QDialog {

@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.28...3.30)
 
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/buildspec.json")
+
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/common/bootstrap.cmake" NO_POLICY_SCOPE)
 
 project(SimpleCamPTZ VERSION ${_version} LANGUAGES C CXX)
@@ -134,4 +136,11 @@ if(BUILD_TESTING)
   target_compile_features(simplecamptz_source_reference_tests PRIVATE cxx_std_17)
   target_link_libraries(simplecamptz_source_reference_tests PRIVATE OBS::libobs)
   add_test(NAME simplecamptz_source_reference_tests COMMAND simplecamptz_source_reference_tests)
+endif()
+
+if(BUILD_TESTING)
+  add_executable(simplecamptz_preset_name_allocator_tests tests/preset_name_allocator_test.cpp)
+  target_include_directories(simplecamptz_preset_name_allocator_tests PRIVATE src)
+  target_compile_features(simplecamptz_preset_name_allocator_tests PRIVATE cxx_std_17)
+  add_test(NAME simplecamptz_preset_name_allocator_tests COMMAND simplecamptz_preset_name_allocator_tests)
 endif()

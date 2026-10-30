@@ -5,9 +5,11 @@
 
 #include <obs-module.h>
 #include <obs.h>
+#include <obs-frontend-api.h>
 #include <plugin-support.h>
 
 #include <QApplication>
+#include <QAbstractButton>
 #include <QByteArray>
 #include <QColor>
 #include <QCheckBox>
@@ -70,7 +72,8 @@
 #include <utility>
 
 namespace simplecam {
-obs_source_t *currentProgramSceneSource();
+obs_source_t *currentProgramSceneSource(bool studio);
+uint64_t currentProgramTransitionGeneration();
 
 namespace {
 
@@ -411,6 +414,7 @@ struct CameraFeedScanContext {
 	std::array<QString, CameraSlotCount> sourceUuids;
 	int topCameraIndex = -1;
 	int depthLimit = 24;
+	QStringList matches;
 };
 
 int configuredCameraForSource(const QString &uuid, const CameraFeedScanContext &context)
@@ -430,7 +434,7 @@ int configuredCameraForSource(const QString &uuid, const CameraFeedScanContext &
 
 void scanVisibleCameraFeeds(obs_scene_t *scene, CameraFeedScanContext &context, int depth = 0);
 
-bool scanCameraFeedItem(obs_scene_t *, obs_sceneitem_t *item, void *opaque)
+bool scanCameraFeedItem(obs_scene_t *scene, obs_sceneitem_t *item, void *opaque)
 {
 	auto *state = static_cast<std::pair<CameraFeedScanContext *, int> *>(opaque);
 	CameraFeedScanContext &context = *state->first;
@@ -444,8 +448,15 @@ bool scanCameraFeedItem(obs_scene_t *, obs_sceneitem_t *item, void *opaque)
 	const char *uuid = obs_source_get_uuid(source);
 	if (uuid) {
 		const int cameraIndex = configuredCameraForSource(QString::fromUtf8(uuid), context);
-		if (cameraIndex >= 0)
+		if (cameraIndex >= 0) {
 			context.topCameraIndex = cameraIndex;
+			if (context.matches.size() < 64)
+				context.matches.push_back(QStringLiteral("depth=%1 parent=%2 parent_uuid=%3 item=%4 feed=%5 camera=%6")
+					.arg(depth).arg(QString::fromUtf8(obs_source_get_name(obs_scene_get_source(scene))))
+					.arg(QString::fromUtf8(obs_source_get_uuid(obs_scene_get_source(scene))))
+					.arg(obs_sceneitem_get_id(item)).arg(QString::fromUtf8(obs_source_get_name(source)))
+					.arg(cameraIndex + 1));
+		}
 	}
 
 	if (depth >= context.depthLimit)
@@ -2225,25 +2236,118 @@ void CameraControlDock::updateSharedGroupIndicator()
 	sharedGroupIndicator_->raise();
 }
 
+void CameraControlDock::initializeOnAirTracking()
+{
+	onAirPolicy_.initialize();
+	requestOnAirSnapshot();
+}
+
+void CameraControlDock::requestOnAirSnapshot()
+{
+	onAirPolicy_.requestSnapshot();
+	// Let OBS finish frontend event handling before reading output state.
+	QTimer::singleShot(0, this, [this]() { refreshOnAirCamera(); });
+}
+
+void CameraControlDock::clearOnAirTracking()
+{
+	onAirPolicy_.reset();
+	if (camera1Card_) camera1Card_->setOnAirCamera(-1);
+	if (camera2Card_) camera2Card_->setOnAirCamera(-1);
+}
+
+void CameraControlDock::bindProgramCommitButtons()
+{
+	if (!obs_frontend_preview_program_mode_active()) return;
+	auto *main = static_cast<QWidget *>(obs_frontend_get_main_window());
+	if (!main) return;
+	const QString transitionText = QString::fromUtf8(obs_frontend_get_locale_string("Transition"));
+	for (int i = programCommitButtons_.size() - 1; i >= 0; --i)
+		if (programCommitButtons_[i].isNull()) programCommitButtons_.removeAt(i);
+	// OBS 32 creates Studio controls dynamically without object names. Match
+	// its localized main Transition button only inside the panel containing
+	// the direct-child T-bar and transition-options icon. Never match a source
+	// Properties preview button or bind to arbitrary buttons by text alone.
+	for (QAbstractButton *candidate : main->findChildren<QAbstractButton *>()) {
+		if (candidate->text() != transitionText) continue;
+		QWidget *panel = candidate->parentWidget();
+		if (!panel || panel->findChildren<QSlider *>(QString(), Qt::FindDirectChildrenOnly).isEmpty()) continue;
+		const auto buttons = panel->findChildren<QAbstractButton *>(QString(), Qt::FindDirectChildrenOnly);
+		bool options = false;
+		for (auto *button : buttons)
+			options = options || button->property("class").toString() == QStringLiteral("icon-dots-vert");
+		if (!options) continue;
+		for (auto *button : buttons) {
+			if (button != candidate && !button->property("id").isValid()) continue;
+			bool bound = false;
+			for (const auto &existing : programCommitButtons_) bound = bound || existing.data() == button;
+			if (bound) continue;
+			programCommitButtons_.push_back(button);
+			QObject::connect(button, &QAbstractButton::clicked, this, [this]() {
+				if (!obs_frontend_preview_program_mode_active()) return;
+				obs_log(LOG_INFO, "[SimpleCamPTZ OnAirDiag v%s] explicit Program transition button", PLUGIN_VERSION);
+				requestOnAirSnapshot();
+			}, Qt::QueuedConnection);
+		}
+		break;
+	}
+}
+
 void CameraControlDock::refreshOnAirCamera()
 {
+	bindProgramCommitButtons();
+	const bool studio = obs_frontend_preview_program_mode_active();
+	// Capture completion generation BEFORE reading state. A completion racing
+	// this scan remains unseen and requests another sample on the next poll.
+	const uint64_t transitionGeneration = currentProgramTransitionGeneration();
+	obs_source_t *output = obs_get_output_source(0);
+	const bool transitioningBeforeScan = output && obs_source_get_type(output) == OBS_SOURCE_TYPE_TRANSITION &&
+		obs_transition_is_active(output);
 	CameraFeedScanContext context;
 	for (int index = 0; index < CameraSlotCount; ++index) {
 		if (runtimes_[index] && runtimes_[index]->isEnabled())
 			context.sourceUuids[index] = runtimes_[index]->cameraFeedSourceUuid();
 	}
 
-	obs_source_t *programSource = currentProgramSceneSource();
+	obs_source_t *programSource = currentProgramSceneSource(studio);
 	if (programSource) {
 		if (obs_scene_t *programScene = obs_scene_from_source(programSource))
 			scanVisibleCameraFeeds(programScene, context);
-		obs_source_release(programSource);
 	}
 
+	// Only inspect the mode-appropriate Program/live tree. Preview is neither
+	// enumerated nor used as a fallback for the ON-AIR indicator or diagnostics.
+	const bool transitioning = transitioningBeforeScan || (output && obs_source_get_type(output) == OBS_SOURCE_TYPE_TRANSITION &&
+		obs_transition_is_active(output));
+	const QString programIdentity = programSource
+		? QStringLiteral("%1/%2").arg(QString::fromUtf8(obs_source_get_uuid(programSource)))
+			.arg(reinterpret_cast<quintptr>(programSource), 0, 16) : QStringLiteral("<none>");
+	onAirPolicy_.observeOutput(programIdentity.toStdString(), transitionGeneration, transitioning);
+	const bool sample = onAirPolicy_.shouldSample(studio, transitioning);
+	if (sample) onAirPolicy_.sampled(context.topCameraIndex);
+	auto describe = [](obs_source_t *source) {
+		return source ? QStringLiteral("%1 uuid=%2 ptr=%3")
+			.arg(QString::fromUtf8(obs_source_get_name(source)))
+			.arg(QString::fromUtf8(obs_source_get_uuid(source)))
+			.arg(reinterpret_cast<quintptr>(source), 0, 16) : QStringLiteral("<none>");
+	};
+	const QString diagnostic = QStringLiteral("studio=%1 tree=%2 output=[%3] inspected_scene=[%4] "
+		"program_camera=%5 program_matches=[%6] held_camera=%7 sampled=%8 transitioning=%9 transition_generation=%10")
+		.arg(studio).arg(studio ? QStringLiteral("output-transition") : QStringLiteral("frontend-current-scene"))
+		.arg(describe(output)).arg(describe(programSource)).arg(context.topCameraIndex + 1)
+		.arg(context.matches.join(QStringLiteral(" | "))).arg(onAirPolicy_.camera() + 1)
+		.arg(sample).arg(transitioning).arg(transitionGeneration);
+	if (diagnostic != onAirDiagnosticState_) {
+		onAirDiagnosticState_ = diagnostic;
+		obs_log(LOG_INFO, "[SimpleCamPTZ OnAirDiag v%s] %s", PLUGIN_VERSION, diagnostic.toUtf8().constData());
+	}
+	obs_source_release(output);
+	obs_source_release(programSource);
+
 	if (camera1Card_)
-		camera1Card_->setOnAirCamera(context.topCameraIndex);
+		camera1Card_->setOnAirCamera(onAirPolicy_.camera());
 	if (camera2Card_)
-		camera2Card_->setOnAirCamera(context.topCameraIndex);
+		camera2Card_->setOnAirCamera(onAirPolicy_.camera());
 }
 
 QSize CameraControlDock::sizeHint() const

@@ -49,6 +49,10 @@ int main()
 	obs_scene_add(second, source);
 	obs_scene_add(parent, obs_scene_get_source(second));
 	check(simplecam::sourceReferencePaths(source).size() == 3, "List direct and indirect scene paths");
+	int editingScenePaths = 0;
+	for (const auto &path : simplecam::sourceReferencePaths(source))
+		if (path.rootSceneUuid == obs_source_get_uuid(obs_scene_get_source(first))) ++editingScenePaths;
+	check(editingScenePaths == 1, "Editing scene can be excluded by UUID without parsing scene names");
 	bool nested = false;
 	for (const auto &path : simplecam::sourceReferencePaths(source))
 		if (path.path == "Parent scene / Second scene" && path.indirect) nested = true;

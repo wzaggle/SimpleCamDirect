@@ -241,3 +241,11 @@ rendering; actual OBS UI/transition behavior still needs the operator check.
 - [ ] Save/restart preserves independence, names and numeric suffix.
 - [ ] Properties remains compact and shutdown has no pending plugin UI callbacks.
 - [ ] Validate live OBS behavior separately on Windows, Apple Silicon and Ubuntu.
+
+## v0.1.8 — preset suffix gap filling (local iteration)
+
+- GCC standalone allocator: 27 checks pass; ON-AIR policy: 29 checks pass.
+- Full plugin compile/native VS build/OBS runtime: not run here (dependencies unavailable).
+- Operator checks for new sources, independent copies, orange occupancy, shared
+  identity, save/restart and independent naming families: PRESET_SUFFIX_018.md.
+- No cloud build or GitHub write. Existing v0.1.7 overlay revisions retained.
