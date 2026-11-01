@@ -258,7 +258,7 @@ bool CameraProfileDocument::parseRoot(const QJsonObject &root, QString *error)
 			}
 		}
 	}
-    for (const auto &value : connections) {
+    for (const QJsonValue value : connections) {
         if (value.toObject().value(QStringLiteral("driver")).toString().isEmpty()) continue;
         const auto limits = root.value(QStringLiteral("capabilities")).toObject().value(QStringLiteral("limits")).toObject();
         for (const QString &name : {QStringLiteral("panSpeed"),QStringLiteral("tiltSpeed"),QStringLiteral("zoomSpeed"),QStringLiteral("zoomAbsolute")}) {
@@ -277,7 +277,7 @@ bool CameraProfileDocument::parseRoot(const QJsonObject &root, QString *error)
     }
     int sonyConnections = 0;
     bool rawTcp = false;
-    for (const auto &value : connections) {
+    for (const QJsonValue value : connections) {
         const auto c = value.toObject();
         if (c.value(QStringLiteral("driver")).toString() == QStringLiteral("sony-visca-udp")) ++sonyConnections;
         if (c.value(QStringLiteral("transport")).toString() == QStringLiteral("tcp") &&
@@ -288,7 +288,7 @@ bool CameraProfileDocument::parseRoot(const QJsonObject &root, QString *error)
         return false;
     }
     int namedRaw = 0;
-    for (const auto &value : connections) {
+    for (const QJsonValue value : connections) {
         const auto driver = value.toObject().value(QStringLiteral("driver")).toString();
         if (driver == QStringLiteral("raw-visca-tcp") || driver == QStringLiteral("raw-visca-udp")) ++namedRaw;
     }
@@ -347,7 +347,7 @@ bool CameraProfileDocument::saveAs(const QString &path, QString *error)
 
 QJsonObject CameraProfileDocument::networkConnection() const
 {
-    for (const auto &v : root_.value(QStringLiteral("connections")).toArray()) {
+    for (const QJsonValue v : root_.value(QStringLiteral("connections")).toArray()) {
         const auto c = v.toObject();
         if (c.value(QStringLiteral("protocol")).toString()!=QStringLiteral("visca")) continue;
         const auto transport=c.value(QStringLiteral("transport")).toString();
@@ -536,7 +536,7 @@ bool CameraProfileDocument::supportsRawViscaTcp() const
 
 QJsonObject CameraProfileDocument::sonyUdpConnection() const
 {
-    for (const auto &value : root_.value(QStringLiteral("connections")).toArray()) {
+    for (const QJsonValue value : root_.value(QStringLiteral("connections")).toArray()) {
         const auto c = value.toObject();
         if (c.value(QStringLiteral("protocol")).toString() == QStringLiteral("visca") &&
             c.value(QStringLiteral("transport")).toString() == QStringLiteral("udp") &&

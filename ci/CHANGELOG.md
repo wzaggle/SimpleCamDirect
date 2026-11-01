@@ -1,3 +1,9 @@
+# v0.2.0 native validation
+
+The first four-platform run exposed Apple Clang range-loop reference warnings
+in five QJsonArray iterations. Materialize QJsonValue copies explicitly; keep
+strict warnings enabled. Native rebuild results remain pending.
+
 # Native build validation notes
 
 ## 2026-10-26 initial setup
