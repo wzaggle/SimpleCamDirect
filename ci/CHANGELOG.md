@@ -1,3 +1,16 @@
+Windows native linking also requires test-only stubs for the full docks Program
+scene/generation callbacks; the isolated preset card fixture never uses them.
+Application symbols and behavior are unchanged. Linux native build/tests and
+DEB packaging passed on the previous commit.
+
+## Native test harness corrections
+
+Mac compilation passes after the JSON-loop fix. Native tests require an explicit
+127.0.0.2 loopback alias and the SDK-built frontend dylib in test Frameworks.
+Use a 1500 ms response deadline only in the multi-action simulated-camera test
+to tolerate scheduling on shared runners; timeout/priority fixtures retain their
+short deadlines. Runtime profile defaults are unchanged.
+
 # v0.2.0 native validation
 
 The first four-platform run exposed Apple Clang range-loop reference warnings

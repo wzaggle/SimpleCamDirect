@@ -12,6 +12,10 @@
 // is covered by the shared runtime recall tests using ObsSource origin.
 namespace simplecam {
 void refreshPresetSourceNames() {}
+// The full dock's OBS callbacks are not exercised by this isolated card test.
+// MSVC retains their references even when unused sections are discarded.
+obs_source_t *currentProgramSceneSource(bool) { return nullptr; }
+std::uint64_t currentProgramTransitionGeneration() { return 0; }
 class PresetEditingTest {
     static inline int checks=0;
     static void check(bool ok,const char *label) {

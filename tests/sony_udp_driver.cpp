@@ -22,7 +22,7 @@ int main(int argc, char **argv)
     auto connections = root["connections"].toArray(); auto connection = connections[0].toObject();
     connection["defaultPort"] = int(port);
     auto udpDefaults = connection["udp"].toObject(); udpDefaults["localPort"] = int(local); connection["udp"] = udpDefaults;
-    auto response = connection["response"].toObject(); response["timeoutMs"] = 150; connection["response"] = response;
+    auto response = connection["response"].toObject(); response["timeoutMs"] = mode == "runtime-actions" ? 1500 : 150; connection["response"] = response;
     connections[0] = connection; root["connections"] = connections;
     const auto testProfile = dir.filePath("sony.json");
     QFile output(testProfile); if (!output.open(QIODevice::WriteOnly)) return 3;

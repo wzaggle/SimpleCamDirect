@@ -117,6 +117,9 @@ jobs:
             .ci-downloads
             .deps/*.zip
           key: simplecam-deps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('buildspec.json', 'ci/dependencies.json') }}
+      - name: Configure second loopback camera address
+        if: runner.os == 'macOS'
+        run: sudo ifconfig lo0 alias 127.0.0.2 up
       - name: Native compile, automated tests, and package
         run: python ci/native_build.py --platform ${{ matrix.platform }}
       - name: Upload platform package

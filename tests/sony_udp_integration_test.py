@@ -129,7 +129,7 @@ class UdpIntegration(unittest.TestCase):
             t=threading.Thread(target=camera);t.start()
             r=subprocess.run([EXE,'runtime-actions',str(server.getsockname()[1]),str(local),PROFILE],capture_output=True,text=True,timeout=7)
             t.join(2)
-            if errors:raise errors[0]
+            if errors:raise AssertionError(r.stdout+r.stderr) from errors[0]
             self.assertEqual(r.returncode,0,r.stdout+r.stderr);self.assertEqual(seen,expected)
     def test_two_cameras_share_listener_and_match_ip(self):
         errors=[];q=[]

@@ -102,6 +102,14 @@ def test_environment(kind):
     elif kind == 'linux':
         dirs = [str(p.parent) for p in (ROOT / '.ci-sdk').rglob('libobs.so*') if p.is_file()]
         env['LD_LIBRARY_PATH'] = os.pathsep.join(sorted(set(dirs))) + os.pathsep + env.get('LD_LIBRARY_PATH', '')
+    if kind in ('windows', 'macos', 'macos-intel'):
+        # The new QApplication fixtures need Qt's offscreen platform plugin.
+        # Standalone test executables do not inherit OBS.app's plugin paths.
+        roots = [ROOT / '.deps'] if kind == 'windows' else [ROOT / '.ci-sdk/qt6']
+        candidates = sorted({str(p.parent) for root in roots for p in root.rglob('*qoffscreen*')
+                             if p.is_file() and p.parent.name == 'platforms'})
+        if candidates:
+            env['QT_QPA_PLATFORM_PLUGIN_PATH'] = os.pathsep.join(candidates)
     return env
 
 
@@ -112,7 +120,7 @@ def stage_macos_test_libraries(build):
     frameworks = build / 'Frameworks'
     frameworks.mkdir(exist_ok=True)
     sdk = ROOT / '.ci-sdk'
-    for prefix in (sdk / 'install/Frameworks', sdk / 'qt6', sdk / 'prebuilt'):
+    for prefix in (sdk / 'install/Frameworks', sdk / 'qt6', sdk / 'prebuilt', sdk / 'build/frontend/api'):
         for library in sorted(prefix.rglob('*.framework')):
             dest = frameworks / library.name
             if library.is_dir() and not dest.exists():
