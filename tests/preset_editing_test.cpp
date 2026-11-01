@@ -75,8 +75,14 @@ public:
 };
 }
 int main(int argc,char **argv) {
+#ifdef Q_OS_WIN
+    qputenv("QT_QPA_PLATFORM","windows");
+#else
     qputenv("QT_QPA_PLATFORM","offscreen");
+#endif
+    std::fprintf(stderr,"Starting Qt widget fixture\n"); std::fflush(stderr);
     QApplication app(argc,argv);
+    std::fprintf(stderr,"Qt widget fixture initialized\n"); std::fflush(stderr);
     if(argc!=2) return 2;
     return simplecam::PresetEditingTest::run(QString::fromLocal8Bit(argv[1]));
 }

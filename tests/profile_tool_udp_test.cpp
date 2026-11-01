@@ -487,9 +487,15 @@ public:
 };
 }
 int main(int argc,char **argv) {
+#ifdef Q_OS_WIN
+    qputenv("QT_QPA_PLATFORM","windows");
+#else
     qputenv("QT_QPA_PLATFORM","offscreen");
+#endif
+    std::fprintf(stderr,"Starting Qt widget fixture\n"); std::fflush(stderr);
     QApplication::setAttribute(Qt::AA_DontUseNativeDialogs);
     QApplication app(argc,argv);
+    std::fprintf(stderr,"Qt widget fixture initialized\n"); std::fflush(stderr);
     if(argc!=3) return 2;
     return simplecam::ProfileToolTest::run(QString::fromLocal8Bit(argv[1]),QString::fromLocal8Bit(argv[2]));
 }

@@ -106,10 +106,17 @@ def test_environment(kind):
         # The new QApplication fixtures need Qt's offscreen platform plugin.
         # Standalone test executables do not inherit OBS.app's plugin paths.
         roots = [ROOT / '.deps'] if kind == 'windows' else [ROOT / '.ci-sdk/qt6']
-        candidates = sorted({str(p.parent) for root in roots for p in root.rglob('*qoffscreen*')
+        candidates = sorted({str(p.parent) for root in roots for p in root.rglob('qwindows.dll' if kind == 'windows' else '*qoffscreen*')
                              if p.is_file() and p.parent.name == 'platforms'})
         if candidates:
             env['QT_QPA_PLATFORM_PLUGIN_PATH'] = os.pathsep.join(candidates)
+    if kind == 'windows':
+        env['QT_QPA_PLATFORM'] = 'windows'
+        env['QT_LOGGING_TO_CONSOLE'] = '1'
+        env['QT_FORCE_STDERR_LOGGING'] = '1'
+        env['QT_DEBUG_PLUGINS'] = '1'
+        import ctypes
+        ctypes.windll.kernel32.SetErrorMode(0x8003)  # No blocking loader/crash dialogs in CI.
     return env
 
 

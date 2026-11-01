@@ -88,6 +88,10 @@ if(WIN32)
 endif()
 
 include(CTest)
+set(simplecam_test_qpa offscreen)
+if(WIN32)
+  set(simplecam_test_qpa windows)
+endif()
 if(BUILD_TESTING)
   add_executable(simplecamptz_packet_tests tests/visca_packets_test.cpp)
   target_include_directories(simplecamptz_packet_tests PRIVATE src)
@@ -189,7 +193,7 @@ if(BUILD_TESTING)
     "${CMAKE_CURRENT_SOURCE_DIR}/data/cameras/sony-srg-300h.visca-udp.json"
     "${CMAKE_CURRENT_SOURCE_DIR}/data/cameras/avipas-av-1280w.visca.json")
   set_tests_properties(simplecamptz_profile_tool_udp_tests PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60)
+    ENVIRONMENT "QT_QPA_PLATFORM=${simplecam_test_qpa}" TIMEOUT 60)
 endif()
 
 if(BUILD_TESTING)
@@ -218,5 +222,5 @@ if(BUILD_TESTING)
   add_test(NAME simplecamptz_preset_editing_tests COMMAND simplecamptz_preset_editing_tests
     "${CMAKE_CURRENT_SOURCE_DIR}/data/cameras/avipas-av-1280w.visca.json")
   set_tests_properties(simplecamptz_preset_editing_tests PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 30)
+    ENVIRONMENT "QT_QPA_PLATFORM=${simplecam_test_qpa}" TIMEOUT 30)
 endif()

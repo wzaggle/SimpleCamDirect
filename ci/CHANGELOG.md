@@ -1,3 +1,11 @@
+## Windows widget platform
+
+Windows native compilation and nine CTest suites pass, including all 18 UDP
+cases. Both QApplication suites time out before output. Use the shipped Windows
+Qt platform plugin for those fixtures instead of forcing offscreen; retain
+offscreen on Mac/Linux. Enable console plugin diagnostics and suppress modal
+Windows loader error dialogs in the CI parent process. Preserve test timeouts.
+
 The new test-only callbacks explicitly include obs.h and cstdint; the local
 compatibility preinclude had masked the missing OBS type declaration. Native
 rebuild required.
