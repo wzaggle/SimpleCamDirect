@@ -1,0 +1,267 @@
+{
+  "schemaVersion": 1,
+  "profileVersion": "1.0.0",
+  "identity": {
+    "id": "sony.srg-300h.visca-udp",
+    "manufacturer": "Sony",
+    "model": "SRG-300H",
+    "displayName": "Sony SRG-300H — VISCA/UDP",
+    "firmware": {
+      "tested": [],
+      "notes": "Zoom in/out, STOP and readback confirmed in SimpleCamPTZ v0.1.9 on maintainer unit; firmware unknown. Other v0.1.10 bindings await camera tests."
+    }
+  },
+  "support": {
+    "status": "protocol-reviewed",
+    "maintainer": "SimpleCamPTZ project",
+    "lastReviewed": "2026-10-30",
+    "sources": [
+      {
+        "kind": "manufacturer-manual",
+        "title": "SRG-300H Technical Manual",
+        "url": "https://pro.sony/s3/2019/01/16020225/AES6100121.pdf",
+        "revision": "A-ES6-100-12(1)",
+        "accessed": "2026-10-30",
+        "notes": "SRG-300H command reference reviewed during probe work. Zoom/STOP/readback confirmed in the plugin. Manual could not be downloaded again for v0.1.10; high IP preset capacity (255) is maintainer-reported, not independently reverified."
+      }
+    ]
+  },
+  "capabilities": {
+    "operations": {
+      "panTilt": {
+        "supported": true,
+        "reason": "Zoom/STOP/readback confirmed in plugin v0.1.9; added functions await camera validation."
+      },
+      "panTiltSpeed": {
+        "supported": true,
+        "reason": "Zoom/STOP/readback confirmed in plugin v0.1.9; added functions await camera validation."
+      },
+      "home": {
+        "supported": true,
+        "reason": "Zoom/STOP/readback confirmed in plugin v0.1.9; added functions await camera validation."
+      },
+      "zoom": {
+        "supported": true,
+        "reason": "Zoom/STOP/readback confirmed in plugin v0.1.9; added functions await camera validation."
+      },
+      "zoomSpeed": {
+        "supported": true,
+        "reason": "Zoom/STOP/readback confirmed in plugin v0.1.9; added functions await camera validation."
+      },
+      "zoomAbsolute": {
+        "supported": true,
+        "reason": "Zoom/STOP/readback confirmed in plugin v0.1.9; added functions await camera validation."
+      },
+      "focus": {
+        "supported": true,
+        "reason": "Zoom/STOP/readback confirmed in plugin v0.1.9; added functions await camera validation."
+      },
+      "presetRecall": {
+        "supported": true,
+        "reason": "Zoom/STOP/readback confirmed in plugin v0.1.9; added functions await camera validation."
+      },
+      "presetRecallSpeed": {
+        "supported": false,
+        "reason": "Not enabled by this profile."
+      },
+      "presetStore": {
+        "supported": true,
+        "reason": "Zoom/STOP/readback confirmed in plugin v0.1.9; added functions await camera validation."
+      },
+      "presetClear": {
+        "supported": false,
+        "reason": "Not enabled by this profile."
+      },
+      "power": {
+        "supported": true,
+        "reason": "Zoom/STOP/readback confirmed in plugin v0.1.9; added functions await camera validation."
+      },
+      "backlight": {
+        "supported": true,
+        "reason": "Zoom/STOP/readback confirmed in plugin v0.1.9; added functions await camera validation."
+      },
+      "whiteBalance": {
+        "supported": true,
+        "reason": "Zoom/STOP/readback confirmed in plugin v0.1.9; added functions await camera validation."
+      },
+      "exposureCompensation": {
+        "supported": true,
+        "reason": "Zoom/STOP/readback confirmed in plugin v0.1.9; added functions await camera validation."
+      },
+      "positionInquiry": {
+        "supported": true,
+        "reason": "Zoom/STOP/readback confirmed in plugin v0.1.9; added functions await camera validation."
+      },
+      "zoomInquiry": {
+        "supported": true,
+        "reason": "Zoom/STOP/readback confirmed in plugin v0.1.9; added functions await camera validation."
+      }
+    },
+    "limits": {
+      "presetCapacity": 255,
+      "presetMin": 0,
+      "presetMax": 254,
+      "zoomSpeed": {
+        "minimum": 0,
+        "maximum": 7
+      },
+      "zoomAbsolute": {
+        "minimum": 0,
+        "maximum": 16384
+      },
+      "panSpeed": {
+        "minimum": 1,
+        "maximum": 24
+      },
+      "tiltSpeed": {
+        "minimum": 1,
+        "maximum": 20
+      }
+    }
+  },
+  "connections": [
+    {
+      "id": "sony-visca-udp",
+      "label": "Sony VISCA over UDP",
+      "protocol": "visca",
+      "transport": "udp",
+      "framing": "visca-ip-header",
+      "driver": "sony-visca-udp",
+      "defaultPort": 52381,
+      "portRequired": true,
+      "addressing": {
+        "mode": "profile-fixed",
+        "default": 1,
+        "minimum": 1,
+        "maximum": 1,
+        "ipAddressForced": true
+      },
+      "udp": {
+        "localPort": 52381,
+        "minimumRequestGapMs": 100,
+        "resetSetupMs": 100
+      },
+      "response": {
+        "policy": "ack-and-completion",
+        "timeoutMs": 3000,
+        "retryCount": 0,
+        "serializePerCamera": true
+      },
+      "setupNotes": [
+        "Enable LAN control before starting. Reply source port can differ from target port.",
+        "Close the standalone probe before OBS uses the listening port.",
+        "Port 52380 is for network discovery/configuration, not this control transport."
+      ]
+    }
+  ],
+  "commands": {
+    "zoomIn": {
+      "driverOperation": "visca.zoomIn",
+      "template": "81 01 04 07 20 FF"
+    },
+    "zoomOut": {
+      "driverOperation": "visca.zoomOut",
+      "template": "81 01 04 07 30 FF"
+    },
+    "zoomStop": {
+      "driverOperation": "visca.zoomStop",
+      "template": "81 01 04 07 00 FF"
+    },
+    "zoomInquiry": {
+      "driverOperation": "visca.zoomInquiry",
+      "template": "81 09 04 47 FF"
+    },
+    "powerInquiry": {
+      "driverOperation": "visca.powerInquiry",
+      "template": "81 09 04 00 FF"
+    },
+    "movePanTilt": {
+      "driverOperation": "visca.panTilt",
+      "template": "81 01 06 01 {PS} {TS} {PD} {TD} FF"
+    },
+    "stopPanTilt": {
+      "driverOperation": "visca.panTiltStop",
+      "template": "81 01 06 01 {PS} {TS} 03 03 FF"
+    },
+    "home": {
+      "driverOperation": "visca.home",
+      "template": "81 01 06 04 FF"
+    },
+    "zoomAbsolute": {
+      "driverOperation": "visca.zoomAbsolute",
+      "template": "81 01 04 47 {ZP} FF"
+    },
+    "focusNear": {
+      "driverOperation": "visca.focusNear",
+      "template": "81 01 04 08 03 FF"
+    },
+    "focusFar": {
+      "driverOperation": "visca.focusFar",
+      "template": "81 01 04 08 02 FF"
+    },
+    "focusStop": {
+      "driverOperation": "visca.focusStop",
+      "template": "81 01 04 08 00 FF"
+    },
+    "focusAuto": {
+      "driverOperation": "visca.focusAuto",
+      "template": "81 01 04 38 02 FF"
+    },
+    "focusManual": {
+      "driverOperation": "visca.focusManual",
+      "template": "81 01 04 38 03 FF"
+    },
+    "whiteBalanceAuto": {
+      "driverOperation": "visca.whiteBalanceAuto",
+      "template": "81 01 04 35 00 FF"
+    },
+    "whiteBalanceManual": {
+      "driverOperation": "visca.whiteBalanceManual",
+      "template": "81 01 04 35 05 FF"
+    },
+    "presetRecall": {
+      "driverOperation": "visca.presetRecall",
+      "template": "81 01 04 3F 02 {PI} FF"
+    },
+    "presetStore": {
+      "driverOperation": "visca.presetStore",
+      "template": "81 01 04 3F 01 {PI} FF",
+      "destructive": true
+    },
+    "powerOn": {
+      "driverOperation": "visca.powerOn",
+      "template": "81 01 04 00 02 FF"
+    },
+    "powerOff": {
+      "driverOperation": "visca.powerOff",
+      "template": "81 01 04 00 03 FF",
+      "destructive": true
+    },
+    "backlightOn": {
+      "driverOperation": "visca.backlightOn",
+      "template": "81 01 04 33 02 FF"
+    },
+    "backlightOff": {
+      "driverOperation": "visca.backlightOff",
+      "template": "81 01 04 33 03 FF"
+    },
+    "exposureCompOn": {
+      "driverOperation": "visca.exposureCompOn",
+      "template": "81 01 04 3E 02 FF"
+    },
+    "exposureCompOff": {
+      "driverOperation": "visca.exposureCompOff",
+      "template": "81 01 04 3E 03 FF"
+    },
+    "positionInquiry": {
+      "driverOperation": "visca.positionInquiry",
+      "template": "81 09 06 12 FF"
+    }
+  },
+  "notes": [
+    "Profile owns UDP framing, fixed target/listening ports, forced address 1, reset setup time, inter-request gap, reply timeout and command/range data. Camera Selection contains installation choices only.",
+    "Zoom/STOP/readback confirmed in the v0.1.9 plugin by the maintainer. Added pan/tilt, Home, absolute zoom, focus, preset, power, white-balance, backlight and exposure commands require incremental hardware testing.",
+    "255 presets over IP is maintainer-reported. SimpleCam physical presets 1..255 encode VISCA memory indexes 0..254. High-index store/recall has not been tested; do not infer it from profile validation.",
+    "No startup power changes, preset erase or identification dependency. Clear in SimpleCam only clears labels. Preset transition speed is not enabled."
+  ]
+}

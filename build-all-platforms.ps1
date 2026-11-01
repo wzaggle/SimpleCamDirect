@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("all", "windows", "macos", "linux")][string]$Platform = "all",
+    [ValidateSet("all", "windows", "macos", "macos-intel", "linux")][string]$Platform = "all",
     [switch]$InstallWindows
 )
 $ErrorActionPreference = "Stop"

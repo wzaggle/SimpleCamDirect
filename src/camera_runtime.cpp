@@ -1,4 +1,5 @@
 #include "camera_runtime.hpp"
+#include "visca_udp_transport.hpp"
 
 #include <plugin-support.h>
 #include <util/base.h>
@@ -11,6 +12,9 @@
 
 #include <memory>
 #include <QMap>
+#include <QDir>
+#include <QFileInfo>
+#include <QCryptographicHash>
 #include <QVariant>
 #include <QStringList>
 
@@ -267,8 +271,7 @@ int PresetCatalog::allocatePhysicalPreset(int pageIndex, int slotIndex, int allo
 	for (int candidate = 1; candidate <= limit; ++candidate) {
 		if (!used.at(candidate)) {
 			selected.physicalPreset = candidate;
-			if (selected.label.isEmpty())
-				selected.label = defaultPresetLabel(candidate);
+            // Allocating/storing a physical slot does not give an unnamed button permission to recall.
 			save();
 			return candidate;
 		}
@@ -352,6 +355,7 @@ void ViscaTcpTransport::setEnabled(bool enabled)
 {
 	if (enabled_ == enabled) return;
 	enabled_ = enabled;
+    lastReply_.invalidate();
 	++requestGeneration_;
 	if (enabled) return;
 	closeSocket();
@@ -473,6 +477,14 @@ void ViscaTcpTransport::startCurrentCommand()
 		return;
 	}
 
+    const int remaining=lastReply_.isValid() ? requestGapMs_-int(lastReply_.elapsed()) : 0;
+    if(remaining>0) {
+        const auto generation=requestGeneration_;
+        QTimer::singleShot(remaining, Qt::PreciseTimer, this, [this,generation]() {
+            if(generation==requestGeneration_ && enabled_) startCurrentCommand();
+        });
+        return;
+    }
 	inputBuffer_.clear();
 	socket_ = new QTcpSocket(this);
 	QObject::connect(socket_, &QTcpSocket::connected, this, [this]() { sendCurrentCommand(); });
@@ -491,6 +503,9 @@ void ViscaTcpTransport::sendCurrentCommand()
 		return;
 
 	const auto &command = current_.commands.at(current_.commandIndex);
+    if(command.canSend && !command.canSend()) {
+        finishCurrentRequest(false,QStringLiteral("Preset recall canceled: button is blank or its mapping changed")); return;
+    }
 	QByteArray bytes = command.bytes;
 	if (bytes.isEmpty()) {
 		finishCurrentRequest(false, QStringLiteral("Empty VISCA command was rejected"));
@@ -548,6 +563,7 @@ void ViscaTcpTransport::handleReply(const QByteArray &frame)
 
 void ViscaTcpTransport::finishCurrentCommand()
 {
+    lastReply_.start();
 	closeSocket();
 	++current_.commandIndex;
 	startCurrentCommand();
@@ -593,6 +609,7 @@ CameraRuntime::CameraRuntime(const QString &settingsPath, const QString &default
 	capacity_(settings_.value(QStringLiteral("camera/capacity"), 100).toInt()),
 	  presets_(settings_, kMaxPresetCapacity), transport_(this)
 {
+	udpTransport_ = new ViscaUdpTransport(this);
 	if (cameraAddress_ < 1 || cameraAddress_ > 7)
 		cameraAddress_ = 1;
 	if (port_ == 0)
@@ -603,15 +620,16 @@ CameraRuntime::CameraRuntime(const QString &settingsPath, const QString &default
 	} else if (!profile_.load(profilePath_, &profileLoadError_)) {
 		obs_log(LOG_ERROR, "SimpleCamPTZ could not load camera profile '%s': %s",
 			profilePath_.toUtf8().constData(), profileLoadError_.toUtf8().constData());
-	} else if (!profile_.supportsRawViscaTcp()) {
-		profileLoadError_ = QStringLiteral("Selected profile has no supported raw VISCA over TCP connection");
+	} else if (!profile_.supportsRuntimeConnection()) {
+		profileLoadError_ = QStringLiteral("Selected profile has no supported VISCA TCP or Sony UDP connection");
 	} else if (profile_.presetCapacity() < 1) {
 		profileLoadError_ = QStringLiteral("Selected profile does not declare a valid preset capacity");
 	} else {
 		capacity_ = profile_.presetCapacity();
 	}
-	transport_.setEndpoint(host_, port_, cameraAddress_);
-	transport_.setEnabled(enabled_);
+    if (profileOwnsConnection())
+        port_ = static_cast<quint16>(profile_.networkConnection().value(QStringLiteral("defaultPort")).toInt());
+    configureTransport();
 	zoomInitializationTimer_.setSingleShot(true);
 	zoomInitializationTimer_.setInterval(0);
 	QObject::connect(&zoomInitializationTimer_, &QTimer::timeout, this, [this]() {
@@ -636,7 +654,7 @@ void CameraRuntime::setEnabled(bool enabled)
 {
 	if (enabled_ == enabled) return;
 	enabled_ = enabled;
-	transport_.setEnabled(enabled);
+	configureTransport();
 	writeCameraSettings();
 	scheduleZoomInitialization();
 }
@@ -673,7 +691,7 @@ int CameraRuntime::capacity() const
 
 bool CameraRuntime::hasUsablePreset(int pageIndex, int slotIndex) const
 {
-	if (!hasLoadedProfile() || !presets().hasUsablePreset(pageIndex, slotIndex))
+	if (!hasLoadedProfile() || !supportsCommand(QStringLiteral("presetRecall")) || !presets().hasUsablePreset(pageIndex, slotIndex))
 		return false;
 	const int physical = presets().slot(pageIndex, slotIndex).physicalPreset;
 	return physical >= 1 && physical <= capacity_;
@@ -701,7 +719,7 @@ QString CameraRuntime::profileLoadError() const
 
 bool CameraRuntime::hasLoadedProfile() const
 {
-	return profile_.isValid() && profileLoadError_.isEmpty() && profile_.supportsRawViscaTcp();
+	return profile_.isValid() && profileLoadError_.isEmpty() && profile_.supportsRuntimeConnection();
 }
 
 int CameraRuntime::zoomAbsoluteTemplateCount() const
@@ -736,26 +754,28 @@ void CameraRuntime::setHost(const QString &host)
 	const QString clean = host.trimmed();
 	if (host_ == clean) return;
 	host_ = clean;
-	transport_.setEndpoint(host_, port_, cameraAddress_);
+	configureTransport();
 	writeCameraSettings();
 	scheduleZoomInitialization();
 }
 
 void CameraRuntime::setPort(quint16 port)
 {
+    if (profileOwnsConnection()) return; // Fixed by this profile, never a slot override.
 	if (port_ == port) return;
 	port_ = port;
-	transport_.setEndpoint(host_, port_, cameraAddress_);
+	configureTransport();
 	writeCameraSettings();
 	scheduleZoomInitialization();
 }
 
 void CameraRuntime::setCameraAddress(int address)
 {
+    if (profileOwnsConnection()) return;
 	const int clean = std::clamp(address, 1, 7);
 	if (cameraAddress_ == clean) return;
 	cameraAddress_ = clean;
-	transport_.setEndpoint(host_, port_, cameraAddress_);
+	configureTransport();
 	writeCameraSettings();
 	scheduleZoomInitialization();
 }
@@ -769,9 +789,9 @@ bool CameraRuntime::setProfilePath(const QString &path, QString *error)
 			*error = loadError;
 		return false;
 	}
-	if (!candidate.supportsRawViscaTcp()) {
+	if (!candidate.supportsRuntimeConnection()) {
 		if (error)
-			*error = QStringLiteral("This first runtime supports raw VISCA over TCP profiles only");
+			*error = QStringLiteral("Select a supported raw TCP, raw UDP or Sony-framed UDP profile");
 		return false;
 	}
 	const int candidateCapacity = candidate.presetCapacity();
@@ -780,10 +800,16 @@ bool CameraRuntime::setProfilePath(const QString &path, QString *error)
 			*error = QStringLiteral("The selected profile does not declare a valid preset capacity");
 		return false;
 	}
+	const bool wasOwned = profileOwnsConnection();
 	profile_ = candidate;
 	profilePath_ = candidate.path();
 	profileLoadError_.clear();
 	capacity_ = candidateCapacity;
+    if (profileOwnsConnection()) {
+        if (!wasOwned) settings_.setValue(QStringLiteral("camera/tcpPort"),port_);
+        port_=static_cast<quint16>(profile_.networkConnection().value(QStringLiteral("defaultPort")).toInt());
+    } else if (wasOwned) port_=static_cast<quint16>(settings_.value(QStringLiteral("camera/tcpPort"),1259).toUInt());
+    configureTransport();
 	writeCameraSettings();
 	scheduleZoomInitialization();
 	return true;
@@ -832,7 +858,23 @@ const PresetCatalog &CameraRuntime::presets() const
 
 void CameraRuntime::testConnection(Completion completion)
 {
-	transport_.testConnection(std::move(completion));
+    if (usesUdp()) {
+        if (!hasLoadedProfile()) { if (completion) completion(false,profileLoadError_); return; }
+        QVector<ViscaTcpTransport::FrameCommand> commands;
+        auto valid = std::make_shared<bool>(false);
+        QVector<QByteArray> packets;
+        QString error;
+        if (!renderCommandPackets(QStringLiteral("powerInquiry"),templateValues(),&packets,&error) || packets.size()!=1) {
+            if (completion) completion(false,error.isEmpty() ? QStringLiteral("Profile needs one power inquiry template") : error);
+            return;
+        }
+        ViscaTcpTransport::FrameCommand inquiry{packets.first(),true};
+        inquiry.onReply = [valid](const QByteArray &p) { *valid = p == QByteArray::fromHex("905002ff") || p == QByteArray::fromHex("905003ff"); };
+        commands.append(inquiry);
+        enqueueCommands(commands,[valid,completion](bool ok,const QString &message) {
+            if (completion) completion(ok && *valid, ok && *valid ? QStringLiteral("UDP power reply received; camera reachable") : message);
+        });
+    } else transport_.testConnection(std::move(completion));
 }
 
 void CameraRuntime::panTilt(int panSpeed, int tiltSpeed, std::uint8_t panDirection, std::uint8_t tiltDirection,
@@ -872,7 +914,7 @@ void CameraRuntime::stopZoom(Completion completion)
 	for (const QByteArray &packet : stopPackets)
 		commands.append({packet, viscaCommandWaitsForCompletion(QStringLiteral("zoomStop"))});
 	appendZoomInquiry(commands);
-	transport_.enqueue(commands, std::move(completion));
+	enqueueCommands(commands, std::move(completion), 0, true);
 }
 
 void CameraRuntime::setZoomPosition(int sliderValue, Completion completion)
@@ -882,7 +924,10 @@ void CameraRuntime::setZoomPosition(int sliderValue, Completion completion)
 			completion(false, QStringLiteral("Zoom slider value must be 0 through 200"));
 		return;
 	}
-	const int calibratedMaximum = profile_.nativeZoomMaximum();
+	const int measuredMaximum=profile_.nativeZoomMaximum();
+    const int calibratedMaximum = measuredMaximum>0 ? measuredMaximum :
+        profile_.root().value(QStringLiteral("capabilities")).toObject().value(QStringLiteral("limits")).toObject()
+            .value(QStringLiteral("zoomAbsolute")).toObject().value(QStringLiteral("maximum")).toInt(-1);
 	const int maximum = calibratedMaximum >= 0 ? calibratedMaximum : kDefaultZoomMaximum;
 	const int nativePosition = qRound(static_cast<double>(maximum) * sliderValue / 200.0);
 	QVector<QByteArray> packets;
@@ -899,7 +944,7 @@ void CameraRuntime::setZoomPosition(int sliderValue, Completion completion)
 	}
 	// Keep the per-camera reported-position cache current after slider moves too.
 	appendZoomInquiry(commands);
-	transport_.enqueue(commands, std::move(completion));
+	enqueueCommands(commands, std::move(completion));
 }
 
 void CameraRuntime::home(Completion completion)
@@ -942,6 +987,11 @@ void CameraRuntime::setCameraPower(bool on, Completion completion)
 			   std::move(completion));
 }
 
+bool CameraRuntime::canRecallPreset(int pageIndex,int slotIndex) const
+{
+    return hasUsablePreset(pageIndex,slotIndex) && !presets().presetLabel(pageIndex,slotIndex).trimmed().isEmpty();
+}
+
 void CameraRuntime::recallLogicalPreset(int logicalButton, int delayMs, Completion completion, PresetRecallOrigin origin)
 {
 	if (!enabled_) {
@@ -955,6 +1005,10 @@ void CameraRuntime::recallLogicalPreset(int logicalButton, int delayMs, Completi
 	}
 
 	const int recallPage = activePage();
+    if(presets().presetLabel(recallPage,logicalButton-1).trimmed().isEmpty()) {
+        if(completion) completion(false,QStringLiteral("Name this preset button before recalling it"));
+        return;
+    }
 	const int physical = resolvePhysicalPreset(recallPage, logicalButton - 1);
 	if (physical < 1) {
 		if (completion)
@@ -972,7 +1026,10 @@ void CameraRuntime::recallLogicalPreset(int logicalButton, int delayMs, Completi
 				presetRecallResultObserver_(logicalButton, recallPage, origin, success);
 			if (completion)
 				completion(success, message);
-		});
+        }, [target=QPointer<CameraRuntime>(this),recallPage,logicalButton,physical]() {
+            return target && target->isEnabled() && target->canRecallPreset(recallPage,logicalButton-1) &&
+                target->resolvePhysicalPreset(recallPage,logicalButton-1)==physical;
+        });
 }
 
 void CameraRuntime::setPresetRecallObserver(PresetRecallObserver observer)
@@ -1015,13 +1072,25 @@ ViscaTemplateValues CameraRuntime::templateValues(int physicalPreset, int panSpe
 						  int zoomSpeed, int zoomPosition) const
 {
 	ViscaTemplateValues values;
-	values.cameraAddress = cameraAddress_;
+	values.cameraAddress = usesSonyUdp() ? 1 : profileOwnsConnection() ?
+        profile_.networkConnection().value(QStringLiteral("addressing")).toObject().value(QStringLiteral("default")).toInt(1) : cameraAddress_;
 	values.panSpeed = panSpeed;
 	values.tiltSpeed = tiltSpeed;
 	values.panDirection = panDirection;
 	values.tiltDirection = tiltDirection;
 	values.zoomSpeed = zoomSpeed;
 	values.zoomPosition = zoomPosition;
+    if (profileOwnsConnection()) {
+        const auto limits = profile_.root().value(QStringLiteral("capabilities")).toObject().value(QStringLiteral("limits")).toObject();
+        auto bounded = [&](const char *name,int value) {
+            const auto range = limits.value(QString::fromLatin1(name)).toObject();
+            if (range.isEmpty()) return value;
+            return std::clamp(value,range.value(QStringLiteral("minimum")).toInt(),range.value(QStringLiteral("maximum")).toInt());
+        };
+        values.panSpeed = bounded("panSpeed",panSpeed);
+        values.tiltSpeed = bounded("tiltSpeed",tiltSpeed);
+        values.zoomSpeed = bounded("zoomSpeed",zoomSpeed);
+    }
 	values.physicalPreset = physicalPreset;
 	return values;
 }
@@ -1062,7 +1131,8 @@ void CameraRuntime::sendProfileCommand(const QString &commandId, const ViscaTemp
 	const bool waitForCompletion = viscaCommandWaitsForCompletion(commandId);
 	for (const QByteArray &packet : packets)
 		commands.append({packet, waitForCompletion});
-	transport_.enqueue(commands, std::move(completion), delayBeforeMs);
+	enqueueCommands(commands, std::move(completion), delayBeforeMs,
+        commandId == QStringLiteral("stopPanTilt") || commandId == QStringLiteral("focusStop"));
 }
 
 void CameraRuntime::initializeZoomPosition()
@@ -1102,7 +1172,7 @@ void CameraRuntime::queryZoomPosition(Completion completion)
 		};
 		commands.append(std::move(inquiry));
 	}
-	transport_.enqueue(commands, [this, generation, accepted, completion = std::move(completion)](bool ok, const QString &message) {
+	enqueueCommands(commands, [this, generation, accepted, completion = std::move(completion)](bool ok, const QString &message) {
 		if (!completion) return;
 		if (generation != zoomConfigurationGeneration_)
 			completion(false, QStringLiteral("Camera configuration changed during zoom inquiry"));
@@ -1129,7 +1199,7 @@ void CameraRuntime::appendZoomInquiry(QVector<ViscaTcpTransport::FrameCommand> &
 	}
 }
 
-void CameraRuntime::sendPresetRecallAndZoomInquiry(int physicalPreset, int delayMs, Completion completion)
+void CameraRuntime::sendPresetRecallAndZoomInquiry(int physicalPreset, int delayMs, Completion completion, std::function<bool()> canSend)
 {
 	const ViscaTemplateValues values = templateValues(physicalPreset);
 	QVector<QByteArray> recallPackets;
@@ -1146,11 +1216,12 @@ void CameraRuntime::sendPresetRecallAndZoomInquiry(int physicalPreset, int delay
 		// A slow full-range move can take much longer than a normal command.
 		ViscaTcpTransport::FrameCommand recall{packet, true};
 		recall.completionTimeoutMs = 60000;
+        recall.canSend=canSend;
 		commands.append(recall);
 	}
 
 	appendZoomInquiry(commands);
-	transport_.enqueue(commands, std::move(completion), delayMs);
+	enqueueCommands(commands, std::move(completion), delayMs);
 }
 
 bool CameraRuntime::handleZoomInquiryReply(const QByteArray &reply)
@@ -1165,7 +1236,10 @@ bool CameraRuntime::handleZoomInquiryReply(const QByteArray &reply)
 			return false;
 		nativePosition = (nativePosition << 4) | (value & 0x0F);
 	}
-	const int calibratedMaximum = profile_.nativeZoomMaximum();
+	const int measuredMaximum=profile_.nativeZoomMaximum();
+    const int calibratedMaximum = measuredMaximum>0 ? measuredMaximum :
+        profile_.root().value(QStringLiteral("capabilities")).toObject().value(QStringLiteral("limits")).toObject()
+            .value(QStringLiteral("zoomAbsolute")).toObject().value(QStringLiteral("maximum")).toInt(-1);
 	const int maximum = calibratedMaximum > 0 ? calibratedMaximum : kDefaultZoomMaximum;
 	const int sliderValue = std::clamp(qRound(static_cast<double>(nativePosition) * 200.0 / maximum), 0, 200);
 	lastZoomSliderValue_ = sliderValue;
@@ -1174,16 +1248,124 @@ bool CameraRuntime::handleZoomInquiryReply(const QByteArray &reply)
 	return true;
 }
 
+bool CameraRuntime::acquireProfileTest(QObject *owner)
+{
+    if (!owner || (profileTestOwner_ && profileTestOwner_ != owner)) return false;
+    if (profileTestOwner_ == owner) return true;
+    profileTestOwner_ = owner;
+    configureTransport(); // Cancel queued actions and stop active movement before lending.
+    profileTestDestroyed_ = connect(owner, &QObject::destroyed, this, [this]() {
+        profileTestOwner_.clear();
+        configureTransport();
+    });
+    return true;
+}
+void CameraRuntime::releaseProfileTest(QObject *owner)
+{
+    if (profileTestOwner_ != owner) return;
+    disconnect(profileTestDestroyed_);
+    profileTestOwner_.clear();
+    configureTransport();
+}
+
+bool CameraRuntime::migrateLegacyConnection(const QString &directory,QString *error)
+{
+    if(profileOwnsConnection() || !hasLoadedProfile()) return true;
+    if(!profile_.supportsRawViscaTcp()) return true;
+    const auto original=profile_;
+    const int gap=profile_.networkConnection().value(QStringLiteral("tuning")).toObject().value(QStringLiteral("minimumRequestGapMs")).toInt(0);
+    const int timeout=profile_.networkConnection().value(QStringLiteral("response")).toObject().value(QStringLiteral("timeoutMs")).toInt(2500);
+    auto candidate=profile_;
+    const QString name=QStringLiteral("%1 — TCP %2, address %3").arg(profile_.displayName()).arg(port_).arg(cameraAddress_);
+    if(!candidate.setProfilerSettings(name,QStringLiteral("raw-visca-tcp"),port_,52381,gap,100,timeout,cameraAddress_,error)) return false;
+    if(!QDir().mkpath(directory)) { if(error) *error=QStringLiteral("Cannot create user profile directory; legacy endpoint retained"); return false; }
+    const auto key=QCryptographicHash::hash((original.id()+QLatin1Char('|')+profilePath_).toUtf8(),QCryptographicHash::Sha256).toHex().left(12);
+    const QString stem=QStringLiteral("migrated-%1-tcp-%2-address-%3").arg(QString::fromLatin1(key)).arg(port_).arg(cameraAddress_);
+    for(int suffix=0;suffix<100;++suffix) {
+        const QString path=QDir(directory).filePath(stem+(suffix ? QStringLiteral("-%1").arg(suffix+1) : QString())+QStringLiteral(".camera.cfg"));
+        if(QFileInfo::exists(path)) {
+            CameraProfileDocument existing;
+            if(existing.load(path) && existing.profileOwnsConnection() && existing.networkMethod()==QStringLiteral("raw-visca-tcp") &&
+                existing.root().value(QStringLiteral("derivedFrom")).toString()==original.id() &&
+                existing.networkConnection().value(QStringLiteral("defaultPort")).toInt()==port_ &&
+                existing.networkConnection().value(QStringLiteral("addressing")).toObject().value(QStringLiteral("default")).toInt()==cameraAddress_)
+                return setProfilePath(path,error);
+            continue; // Never overwrite a user-edited file with a conflicting endpoint or identity.
+        }
+        if(!candidate.saveAs(path,error)) return false;
+        return setProfilePath(path,error);
+    }
+    if(error) *error=QStringLiteral("Cannot allocate migration profile filename; legacy endpoint retained");
+    return false;
+}
+QString CameraRuntime::connectionSummary() const
+{
+    const QString method=usesSonyUdp() ? QStringLiteral("UDP · Sony framing") : usesUdp() ? QStringLiteral("UDP · Raw") : QStringLiteral("TCP · Raw");
+    const int address=templateValues().cameraAddress;
+    QString text=QStringLiteral("%1 · Camera port %2 · VISCA %3").arg(method).arg(port_).arg(address);
+    if(usesUdp()) text+=QStringLiteral(" · Receive port %1").arg(udpLocalPort());
+    if(!profileOwnsConnection()) text+=QStringLiteral(" · Legacy endpoint retained");
+    return text;
+}
+
+bool CameraRuntime::usesUdp() const { return usesSonyUdp() || profile_.supportsRawViscaUdp(); }
+bool CameraRuntime::usesSonyUdp() const { return profile_.supportsSonyViscaUdp() && !profile_.supportsRawViscaTcp(); }
+bool CameraRuntime::supportsCommand(const QString &id) const { return hasLoadedProfile() && !profile_.command(id).templates.isEmpty(); }
+void CameraRuntime::configureTransport()
+{
+    transport_.setEnabled(enabled_ && !profileTestActive() && !usesUdp());
+    transport_.setEndpoint(host_, port_, templateValues().cameraAddress);
+    transport_.setRequestGap(profileOwnsConnection() ? requestGapMs() : 0);
+    udpTransport_->setEnabled(enabled_ && !profileTestActive() && usesUdp());
+    udpTransport_->configure(host_, port_, udpLocalPort(), requestGapMs(), replyTimeoutMs(),
+        profile_.networkConnection().value(QStringLiteral("udp")).toObject().value(QStringLiteral("resetSetupMs")).toInt(100),
+        usesSonyUdp(), templateValues().cameraAddress);
+}
+quint16 CameraRuntime::udpLocalPort() const
+{
+    const auto c=profile_.networkConnection(); const auto udp=c.value(QStringLiteral("udp")).toObject();
+    return static_cast<quint16>(udp.value(QStringLiteral("localPortMode")).toString()==QStringLiteral("same-as-camera") ?
+        c.value(QStringLiteral("defaultPort")).toInt() : udp.value(QStringLiteral("localPort")).toInt());
+}
+int CameraRuntime::requestGapMs() const
+{
+    const auto c=profile_.networkConnection();
+    return c.value(QStringLiteral("tuning")).toObject().value(QStringLiteral("minimumRequestGapMs")).toInt(
+        c.value(QStringLiteral("udp")).toObject().value(QStringLiteral("minimumRequestGapMs")).toInt());
+}
+int CameraRuntime::replyTimeoutMs() const
+{
+    return profile_.networkConnection().value(QStringLiteral("response")).toObject().value(QStringLiteral("timeoutMs")).toInt();
+}
+void CameraRuntime::enqueueCommands(const QVector<ViscaTcpTransport::FrameCommand> &commands, Completion completion,
+                                   int delayBeforeMs, bool priorityStop)
+{
+    if (profileTestActive()) {
+        if (completion) completion(false, QStringLiteral("Camera is reserved by Camera Profiler; use Stop & Release Camera in that tool"));
+        return;
+    }
+    auto tuned=commands;
+    if(profileOwnsConnection()) for(auto &command : tuned) command.completionTimeoutMs=replyTimeoutMs();
+    if (usesUdp()) udpTransport_->enqueue(tuned,std::move(completion),delayBeforeMs,priorityStop);
+    else transport_.enqueue(tuned,std::move(completion),delayBeforeMs);
+}
+
 void CameraRuntime::writeCameraSettings()
 {
 	settings_.setValue(QStringLiteral("camera/enabled"), enabled_);
 	settings_.setValue(QStringLiteral("camera/name"), cameraName_);
 	settings_.setValue(QStringLiteral("camera/feedSourceUuid"), cameraFeedSourceUuid_);
 	settings_.setValue(QStringLiteral("camera/host"), host_);
-	settings_.setValue(QStringLiteral("camera/port"), port_);
+	if (!profileOwnsConnection()) settings_.setValue(QStringLiteral("camera/port"), port_);
 	settings_.setValue(QStringLiteral("camera/address"), cameraAddress_);
 	settings_.setValue(QStringLiteral("camera/capacity"), capacity_);
 	settings_.setValue(QStringLiteral("camera/profilePath"), profilePath_);
+    // Ignore and retire v0.1.9 transport overrides; engineered requirements
+    // come from the selected reusable profile, not the installation slot.
+    settings_.remove(QStringLiteral("camera/udpLocalPort"));
+    settings_.remove(QStringLiteral("camera/requestGapMs"));
+    settings_.remove(QStringLiteral("camera/replyTimeoutMs"));
+    settings_.remove(QStringLiteral("camera/udpPort"));
 	settings_.sync();
 }
 
@@ -1211,3 +1393,4 @@ void setCameraRuntime(int cameraIndex, CameraRuntime *runtime)
 }
 
 } // namespace simplecam
+

@@ -40,3 +40,4 @@ The optional Qt title-bar test in MAC_DOCK_R17.md uses the OBS-owned wrapper
 and inherits the host style, with no custom colors. It bypasses native window
 decorations only when the operator selects that diagnostic toggle. This does
 not change Windows title bars or introduce a separate application window.
+

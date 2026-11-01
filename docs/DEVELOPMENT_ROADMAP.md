@@ -82,3 +82,25 @@ Add NDI PTZ as a separate adapter after the staged VISCA and ONVIF work is stabl
 - Every new protocol or command format reruns all earlier protocol fixtures and hardware regression checks.
 - Maintain the fork-local and upstream coding-agent instructions, profile evidence, test metrics, and platform results as each milestone changes.
 - Prefer a small complete milestone over beginning several unfinished protocols or configuration tools at once.
+
+
+
+## v0.1.11 implementation update
+
+The existing Profile Test harness now supports Sony VISCA/UDP through the same
+adapter as the runtime, with profile timing/port draft controls and Save As. See
+[PROFILE_TOOL_021.md](PROFILE_TOOL_021.md). This supersedes older TCP-only harness
+statements above. A general full-JSON/structured profile editor remains future
+work; this update extends the existing command editor only.
+
+
+## v0.1.12 Camera Profiler update
+
+See [CAMERA_PROFILER_012.md](CAMERA_PROFILER_012.md). Camera Profiler replaces the
+slot selector/Apply controls with independent name/model, load/New draft/Save As,
+three explicit network methods and separate profile tuning. Saved profiles are
+chosen in Cameras. Test IP stays private to the test session. New Profile uses
+the loaded bindings/ranges as a starting template; full JSON/range authoring and
+community submissions remain future work. Test Windows RelWithDebInfo/OBS first,
+then M1 and Ubuntu. Repeat Sony and legacy TCP smoke tests; raw UDP requires its
+own hardware acceptance. Preserve test ownership, Stop & Release and saved names.

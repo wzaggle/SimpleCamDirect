@@ -47,6 +47,21 @@
         "ENABLE_QT": "ON",
         "BUILD_TESTING": "ON"
       }
+    },
+    {
+      "name": "macos-x86_64",
+      "displayName": "SimpleCamPTZ - Intel Mac",
+      "generator": "Xcode",
+      "binaryDir": "${sourceDir}/out/build/simplecamptz-macos-x86_64",
+      "cacheVariables": {
+        "CMAKE_OSX_ARCHITECTURES": "x86_64",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "13.0",
+        "SIMPLECAM_USE_EXTERNAL_SDK": "ON",
+        "SIMPLECAM_SKIP_AUTO_PACKAGE": "ON",
+        "ENABLE_FRONTEND_API": "ON",
+        "ENABLE_QT": "ON",
+        "BUILD_TESTING": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -70,6 +85,11 @@
     {
       "name": "linux-x64-relwithdebinfo",
       "configurePreset": "linux-x64",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "macos-x86_64-relwithdebinfo",
+      "configurePreset": "macos-x86_64",
       "configuration": "RelWithDebInfo"
     }
   ],

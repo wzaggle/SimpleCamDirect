@@ -542,7 +542,7 @@ void populatePresetList(obs_property_t *preset, int cameraIndex)
 	const CameraRuntime *runtime = cameraRuntime(cameraIndex);
 	const int activePage = runtime ? runtime->activePage() : 0;
 	for (int i = 0; i < PresetCatalog::SlotsPerPage; ++i) {
-		const bool usable = !runtime || runtime->hasUsablePreset(activePage, i);
+		const bool usable = !runtime || runtime->canRecallPreset(activePage, i);
 		QString label = runtime ? runtime->presets().presetLabel(activePage, i) : QString();
 		if (!usable)
 			label = QStringLiteral("---");

@@ -1,5 +1,6 @@
 {
   "schemaVersion": 1,
+  "profileVersion": "1.0.1",
   "identity": {
     "id": "avipas.av-1280w.visca",
     "manufacturer": "AViPAS",
@@ -24,6 +25,7 @@
     "lastReviewed": "2026-10-24",
     "hardwareTest": {
       "testedBy": "Project maintainer",
+      "firmware": "Not recorded",
       "testedAt": "2026-10-24",
       "connectionId": "visca-tcp-raw",
       "pluginVersion": "0.1.0",
@@ -134,7 +136,7 @@
         "minimum": 0,
         "maximum": 1,
         "units": "normalized UI coordinate only",
-        "encoding": "Physical/native mapping is not specified yet; optical magnification is 10x and digital magnification is up to 5x when enabled."
+        "encoding": "Native mapping unmeasured; optical 10x, digital up to 5x when enabled."
       }
     }
   },
@@ -145,7 +147,7 @@
       "protocol": "visca",
       "transport": "tcp",
       "framing": "raw-visca",
-      "defaultPort": 3001,
+      "defaultPort": 1259,
       "portRequired": true,
       "addressing": {
         "mode": "visca-address-byte",
@@ -167,10 +169,10 @@
         "timeoutMs": 5000,
         "retryCount": 0,
         "serializePerCamera": true,
-        "notes": "The current SimpleCam setup has been used successfully at TCP port 1259. The AViPAS manual lists configurable VISCA port default 3001, but does not identify TCP versus UDP in the port table. Keep the port editable and verify this exact unit's transport/port settings."
+        "notes": "The current SimpleCam setup has been used successfully at TCP port 1259. The AViPAS manual lists configurable VISCA port default 3001, but does not identify TCP versus UDP in the port table. The profile uses the maintainer-tested port 1259; create a profile variant for a differently configured unit."
       },
       "setupNotes": [
-        "The current installation endpoint 192.168.1.4:1259 belongs in OBS camera-slot settings, not this reusable profile.",
+        "The maintainer-tested TCP port is 1259 and belongs in the profile; the installation IP belongs only in camera-slot settings.",
         "The manual lists factory IP 192.168.5.163 and VISCA port 3001; the camera may have been reconfigured.",
         "This profile assumes the working SimpleCam path's raw VISCA TCP framing, to be reconfirmed against the current camera."
       ]
@@ -336,3 +338,4 @@
     "VISCA power-off means standby. Preset clear/store and power-off remain safety-confirmed actions in the UI."
   ]
 }
+

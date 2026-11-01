@@ -106,3 +106,4 @@ inline ViscaPacket makeCameraPower(int cameraAddress, bool on)
 }
 
 } // namespace simplecam
+

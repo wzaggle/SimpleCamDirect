@@ -169,3 +169,4 @@ int main(int argc, char **argv)
 	CHECK(!unsupported.loadBytes(QJsonDocument(invalidRoot).toJson(), &error));
 	return 0;
 }
+

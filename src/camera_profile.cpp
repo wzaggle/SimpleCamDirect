@@ -106,6 +106,7 @@ bool CameraProfileDocument::loadBytes(const QByteArray &bytes, QString *error)
 	if (!parseRoot(doc.object(), error))
 		return false;
 	path_.clear();
+    explicitDisplayName_ = false;
 	return true;
 }
 
@@ -115,6 +116,10 @@ bool CameraProfileDocument::parseRoot(const QJsonObject &root, QString *error)
 		setError(error, QStringLiteral("Only camera profile schemaVersion 1 is supported"));
 		return false;
 	}
+    if(root.contains(QStringLiteral("profileVersion"))) {
+        CameraProfileDocument versionCheck;
+        if(!root.value(QStringLiteral("profileVersion")).isString() || !versionCheck.setProfileVersion(root.value(QStringLiteral("profileVersion")).toString(),error)) return false;
+    }
 	const QJsonObject identity = root.value(QStringLiteral("identity")).toObject();
 	if (identity.value(QStringLiteral("id")).toString().isEmpty() ||
 	    identity.value(QStringLiteral("manufacturer")).toString().isEmpty() ||
@@ -154,9 +159,61 @@ bool CameraProfileDocument::parseRoot(const QJsonObject &root, QString *error)
 			return false;
 		}
 		if (connection.value(QStringLiteral("protocol")).toString() != QStringLiteral("visca")) {
-			setError(error, QStringLiteral("The first Profile Test tool supports VISCA profiles only"));
+			setError(error, QStringLiteral("Camera Profiler supports VISCA profiles only"));
 			return false;
 		}
+        if (connection.value(QStringLiteral("driver")).toString() == QStringLiteral("sony-visca-udp")) {
+            const auto udp = connection.value(QStringLiteral("udp")).toObject();
+            const auto response = connection.value(QStringLiteral("response")).toObject();
+            auto integer = [](const QJsonValue &v, int low, int high) {
+                return v.isDouble() && v.toDouble() == v.toInt(-1) && v.toInt(-1) >= low && v.toInt(-1) <= high;
+            };
+            if (connection.value(QStringLiteral("transport")).toString() != QStringLiteral("udp") ||
+                connection.value(QStringLiteral("framing")).toString() != QStringLiteral("visca-ip-header") ||
+                !integer(connection.value(QStringLiteral("defaultPort")),1,65535) ||
+                !integer(udp.value(QStringLiteral("localPort")),1,65535) ||
+                !integer(udp.value(QStringLiteral("minimumRequestGapMs")),0,2000) ||
+                (!udp.value(QStringLiteral("resetSetupMs")).isUndefined() && !integer(udp.value(QStringLiteral("resetSetupMs")),0,2000)) ||
+                !integer(response.value(QStringLiteral("timeoutMs")),50,30000)) {
+                setError(error, QStringLiteral("Sony UDP connection requires valid framing, port, localPort, minimumRequestGapMs and timeoutMs"));
+                return false;
+            }
+        }
+        const auto udpPolicy=connection.value(QStringLiteral("udp")).toObject().value(QStringLiteral("localPortMode"));
+        if(!udpPolicy.isUndefined() && udpPolicy.toString()!=QStringLiteral("same-as-camera") && udpPolicy.toString()!=QStringLiteral("fixed")) {
+            setError(error,QStringLiteral("Invalid UDP local port policy")); return false;
+        }
+        if(connection.contains(QStringLiteral("tuning"))) {
+            const auto gap=connection.value(QStringLiteral("tuning")).toObject().value(QStringLiteral("minimumRequestGapMs"));
+            if(!gap.isDouble() || gap.toDouble()!=gap.toInt(-1) || gap.toInt(-1)<0 || gap.toInt(-1)>2000) {
+                setError(error,QStringLiteral("Invalid profile request spacing")); return false;
+            }
+        }
+        const QString driver = connection.value(QStringLiteral("driver")).toString();
+        if (driver == QStringLiteral("raw-visca-tcp") || driver == QStringLiteral("raw-visca-udp")) {
+            const bool udp = driver == QStringLiteral("raw-visca-udp");
+            auto integer = [](const QJsonValue &v, int low, int high) {
+                return v.isDouble() && v.toDouble() == v.toInt(-1) && v.toInt(-1)>=low && v.toInt(-1)<=high;
+            };
+            const auto tuning = connection.value(QStringLiteral("tuning")).toObject();
+            if (connection.value(QStringLiteral("transport")).toString() != (udp ? QStringLiteral("udp") : QStringLiteral("tcp")) ||
+                connection.value(QStringLiteral("framing")).toString() != QStringLiteral("raw-visca") ||
+                !integer(connection.value(QStringLiteral("defaultPort")),1,65535) ||
+                !integer(tuning.value(QStringLiteral("minimumRequestGapMs")),0,2000) ||
+                !integer(connection.value(QStringLiteral("response")).toObject().value(QStringLiteral("timeoutMs")),50,30000) ||
+                (udp && !integer(connection.value(QStringLiteral("udp")).toObject().value(QStringLiteral("localPort")),1,65535))) {
+                setError(error,QStringLiteral("Raw VISCA profile needs valid transport/framing, ports, request gap and reply timeout")); return false;
+            }
+        } else if (!driver.isEmpty() && driver != QStringLiteral("sony-visca-udp")) {
+            setError(error,QStringLiteral("Unsupported network driver: %1").arg(driver)); return false;
+        }
+        const auto addressing = connection.value(QStringLiteral("addressing")).toObject();
+        if (addressing.value(QStringLiteral("mode")).toString() == QStringLiteral("profile-fixed")) {
+            const auto value = addressing.value(QStringLiteral("default"));
+            if (!value.isDouble() || value.toDouble()!=value.toInt() || value.toInt()<1 || value.toInt()>7) {
+                setError(error,QStringLiteral("Profile VISCA address must be an integer from 1 to 7")); return false;
+            }
+        }
 		connectionIds.insert(connectionId);
 	}
 	const QJsonObject commands = root.value(QStringLiteral("commands")).toObject();
@@ -201,6 +258,43 @@ bool CameraProfileDocument::parseRoot(const QJsonObject &root, QString *error)
 			}
 		}
 	}
+    for (const auto &value : connections) {
+        if (value.toObject().value(QStringLiteral("driver")).toString().isEmpty()) continue;
+        const auto limits = root.value(QStringLiteral("capabilities")).toObject().value(QStringLiteral("limits")).toObject();
+        for (const QString &name : {QStringLiteral("panSpeed"),QStringLiteral("tiltSpeed"),QStringLiteral("zoomSpeed"),QStringLiteral("zoomAbsolute")}) {
+            const auto range = limits.value(name).toObject();
+            if (range.isEmpty()) continue; // Earlier zoom-only profiles remain readable.
+            const int low = range.value(QStringLiteral("minimum")).toInt(-1);
+            const int high = range.value(QStringLiteral("maximum")).toInt(-1);
+            const int ceiling = name == QStringLiteral("panSpeed") ? 24 : name == QStringLiteral("tiltSpeed") ? 20 :
+                name == QStringLiteral("zoomSpeed") ? 15 : 65535;
+            if (range.value(QStringLiteral("minimum")).toDouble(-1)!=low || range.value(QStringLiteral("maximum")).toDouble(-1)!=high ||
+                low < 0 || high < low || high > ceiling ||
+                ((name == QStringLiteral("panSpeed") || name == QStringLiteral("tiltSpeed")) && low < 1)) {
+                setError(error,QStringLiteral("Invalid VISCA profile range: %1").arg(name)); return false;
+            }
+        }
+    }
+    int sonyConnections = 0;
+    bool rawTcp = false;
+    for (const auto &value : connections) {
+        const auto c = value.toObject();
+        if (c.value(QStringLiteral("driver")).toString() == QStringLiteral("sony-visca-udp")) ++sonyConnections;
+        if (c.value(QStringLiteral("transport")).toString() == QStringLiteral("tcp") &&
+            c.value(QStringLiteral("framing")).toString() == QStringLiteral("raw-visca")) rawTcp = true;
+    }
+    if (sonyConnections > 1 || (sonyConnections && rawTcp)) {
+        setError(error,QStringLiteral("Use one Sony UDP connection in its own profile; mixed TCP/UDP selection is not implemented"));
+        return false;
+    }
+    int namedRaw = 0;
+    for (const auto &value : connections) {
+        const auto driver = value.toObject().value(QStringLiteral("driver")).toString();
+        if (driver == QStringLiteral("raw-visca-tcp") || driver == QStringLiteral("raw-visca-udp")) ++namedRaw;
+    }
+    if (namedRaw && connections.size()!=1) {
+        setError(error,QStringLiteral("Profiler network methods must use separate single-method profiles")); return false;
+    }
 	root_ = root;
 	return true;
 }
@@ -224,12 +318,14 @@ bool CameraProfileDocument::saveAs(const QString &path, QString *error)
 	if (baseName.isEmpty())
 		baseName = QStringLiteral("custom-camera");
 	identity.insert(QStringLiteral("id"), QStringLiteral("user.%1").arg(baseName.toLower()));
-	identity.insert(QStringLiteral("displayName"), displayName);
+	identity.insert(QStringLiteral("displayName"), explicitDisplayName_ ? this->displayName() : displayName);
 	savedRoot.insert(QStringLiteral("identity"), identity);
 	QJsonObject support = savedRoot.value(QStringLiteral("support")).toObject();
 	support.insert(QStringLiteral("status"), QStringLiteral("draft"));
+    support.remove(QStringLiteral("hardwareTest"));
 	savedRoot.insert(QStringLiteral("support"), support);
 	savedRoot.insert(QStringLiteral("derivedFrom"), id());
+    savedRoot.insert(QStringLiteral("profileVersion"),profileVersion());
 	QSaveFile file(path);
 	if (!file.open(QIODevice::WriteOnly)) {
 		setError(error, QStringLiteral("Could not save profile: %1").arg(file.errorString()));
@@ -247,6 +343,156 @@ bool CameraProfileDocument::saveAs(const QString &path, QString *error)
 	root_ = savedRoot;
 	path_ = path;
 	return true;
+}
+
+QJsonObject CameraProfileDocument::networkConnection() const
+{
+    for (const auto &v : root_.value(QStringLiteral("connections")).toArray()) {
+        const auto c = v.toObject();
+        if (c.value(QStringLiteral("protocol")).toString()!=QStringLiteral("visca")) continue;
+        const auto transport=c.value(QStringLiteral("transport")).toString();
+        const auto framing=c.value(QStringLiteral("framing")).toString();
+        if ((transport==QStringLiteral("tcp") && framing==QStringLiteral("raw-visca")) ||
+            (transport==QStringLiteral("udp") && (framing==QStringLiteral("raw-visca") || framing==QStringLiteral("visca-ip-header")))) return c;
+    }
+    return {};
+}
+QString CameraProfileDocument::networkMethod() const
+{
+    const auto c=networkConnection();
+    if(c.value(QStringLiteral("transport")).toString()==QStringLiteral("tcp")) return QStringLiteral("raw-visca-tcp");
+    if(c.value(QStringLiteral("driver")).toString()==QStringLiteral("sony-visca-udp")) return QStringLiteral("sony-visca-udp");
+    if(c.value(QStringLiteral("driver")).toString()==QStringLiteral("raw-visca-udp")) return QStringLiteral("raw-visca-udp");
+    return {};
+}
+bool CameraProfileDocument::supportsRawViscaUdp() const { return networkMethod()==QStringLiteral("raw-visca-udp"); }
+bool CameraProfileDocument::profileOwnsConnection() const { return !networkConnection().value(QStringLiteral("driver")).toString().isEmpty(); }
+
+bool CameraProfileDocument::setProfilerSettings(const QString &name, const QString &method, int port, int localPort,
+    int gapMs, int resetMs, int timeoutMs, int address, QString *error)
+{
+    if(name.trimmed().isEmpty() || name.trimmed().size()>160 ||
+        (method!=QStringLiteral("raw-visca-tcp") && method!=QStringLiteral("raw-visca-udp") && method!=QStringLiteral("sony-visca-udp")) ||
+        port<1 || port>65535 || localPort<1 || localPort>65535 || gapMs<0 || gapMs>2000 ||
+        resetMs<0 || resetMs>2000 || timeoutMs<50 || timeoutMs>30000 || address<1 || address>7) {
+        setError(error,QStringLiteral("Enter a profile name, supported method and valid port/timing/address values")); return false;
+    }
+    auto candidate=root_;
+    auto identity=candidate.value(QStringLiteral("identity")).toObject();
+    identity.insert(QStringLiteral("displayName"),name.trimmed()); candidate.insert(QStringLiteral("identity"),identity);
+    const bool sony=method==QStringLiteral("sony-visca-udp"), udp=method!=QStringLiteral("raw-visca-tcp");
+    auto c=networkConnection();
+    c.insert(QStringLiteral("id"),method); c.insert(QStringLiteral("driver"),method);
+    c.insert(QStringLiteral("label"),sony ? QStringLiteral("VISCA / UDP — Sony framing") : udp ? QStringLiteral("VISCA / UDP — Raw") : QStringLiteral("VISCA / TCP — Raw"));
+    c.insert(QStringLiteral("protocol"),QStringLiteral("visca"));
+    c.insert(QStringLiteral("transport"),udp ? QStringLiteral("udp") : QStringLiteral("tcp"));
+    c.insert(QStringLiteral("framing"),sony ? QStringLiteral("visca-ip-header") : QStringLiteral("raw-visca"));
+    c.insert(QStringLiteral("defaultPort"),port);
+    c.insert(QStringLiteral("addressing"),QJsonObject{{QStringLiteral("mode"),QStringLiteral("profile-fixed")},{QStringLiteral("default"),sony ? 1 : address}});
+    c.insert(QStringLiteral("tuning"),QJsonObject{{QStringLiteral("minimumRequestGapMs"),gapMs}});
+    if(udp) c.insert(QStringLiteral("udp"),QJsonObject{{QStringLiteral("localPort"),localPort},{QStringLiteral("minimumRequestGapMs"),gapMs},{QStringLiteral("resetSetupMs"),resetMs}});
+    else c.remove(QStringLiteral("udp"));
+    auto response=c.value(QStringLiteral("response")).toObject(); response.insert(QStringLiteral("timeoutMs"),timeoutMs);
+    c.insert(QStringLiteral("response"),response);
+    candidate.insert(QStringLiteral("connections"),QJsonArray{c});
+    if(!parseRoot(candidate,error)) return false;
+    explicitDisplayName_=true;
+    return true;
+}
+
+QString CameraProfileDocument::profileVersion() const
+{
+    return root_.value(QStringLiteral("profileVersion")).toString(QStringLiteral("1.0.0"));
+}
+bool CameraProfileDocument::setProfileVersion(const QString &version,QString *error)
+{
+    static const QRegularExpression pattern(QStringLiteral(R"(^[0-9]+(?:\.[0-9]+){0,2}(?:-[A-Za-z0-9.-]+)?$)"));
+    if(version.size()>32 || !pattern.match(version.trimmed()).hasMatch()) {
+        setError(error,QStringLiteral("Use a profile version such as 1.0.0 or 1.0.1-draft")); return false;
+    }
+    root_.insert(QStringLiteral("profileVersion"),version.trimmed()); return true;
+}
+bool CameraProfileDocument::setLocalPortPolicy(bool sameAsCamera,QString *error)
+{
+    if(networkMethod()==QStringLiteral("raw-visca-tcp")) return true;
+    auto candidate=root_;
+    auto connections=candidate.value(QStringLiteral("connections")).toArray();
+    if(connections.size()!=1) { setError(error,QStringLiteral("Local-port policy requires one network method")); return false; }
+    auto c=connections[0].toObject(); auto udp=c.value(QStringLiteral("udp")).toObject();
+    udp.insert(QStringLiteral("localPortMode"),sameAsCamera ? QStringLiteral("same-as-camera") : QStringLiteral("fixed"));
+    if(sameAsCamera) udp.insert(QStringLiteral("localPort"),c.value(QStringLiteral("defaultPort")));
+    c.insert(QStringLiteral("udp"),udp); connections[0]=c; candidate.insert(QStringLiteral("connections"),connections);
+    return parseRoot(candidate,error);
+}
+
+bool CameraProfileDocument::setIdentity(const QString &manufacturer,const QString &model,QString *error)
+{
+    if(manufacturer.trimmed().isEmpty() || model.trimmed().isEmpty() || manufacturer.size()>120 || model.size()>120) {
+        setError(error,QStringLiteral("Enter manufacturer and model")); return false;
+    }
+    auto identity=root_.value(QStringLiteral("identity")).toObject();
+    identity.insert(QStringLiteral("manufacturer"),manufacturer.trimmed()); identity.insert(QStringLiteral("model"),model.trimmed());
+    root_.insert(QStringLiteral("identity"),identity); return true;
+}
+bool CameraProfileDocument::newDraft(QString *error)
+{
+    auto candidate=root_;
+    const QString parent=id();
+    auto identity=candidate.value(QStringLiteral("identity")).toObject();
+    identity.insert(QStringLiteral("id"),QStringLiteral("user.unsaved-draft"));
+    identity.insert(QStringLiteral("displayName"),QStringLiteral("New camera profile"));
+    identity.insert(QStringLiteral("manufacturer"),QStringLiteral("Custom"));
+    identity.insert(QStringLiteral("model"),QStringLiteral("Unspecified"));
+    identity.remove(QStringLiteral("aliases")); identity.remove(QStringLiteral("hardwareRevisions"));
+    identity.insert(QStringLiteral("firmware"),QJsonObject{});
+    candidate.insert(QStringLiteral("identity"),identity);
+    auto support=candidate.value(QStringLiteral("support")).toObject(); support.insert(QStringLiteral("status"),QStringLiteral("draft"));
+    support.remove(QStringLiteral("hardwareTest"));
+    candidate.insert(QStringLiteral("support"),support); candidate.insert(QStringLiteral("derivedFrom"),parent);
+    // Existing command/range definitions are a starting template, not evidence for the new model.
+    candidate.remove(QStringLiteral("measurements"));
+    auto capabilities=candidate.value(QStringLiteral("capabilities")).toObject();
+    auto limits=capabilities.value(QStringLiteral("limits")).toObject();
+    auto zoom=limits.value(QStringLiteral("zoom")).toObject(); zoom.remove(QStringLiteral("nativeRange"));
+    if(!zoom.isEmpty()) limits.insert(QStringLiteral("zoom"),zoom);
+    capabilities.insert(QStringLiteral("limits"),limits);
+    auto operations=capabilities.value(QStringLiteral("operations")).toObject();
+    for(auto it=operations.begin();it!=operations.end();++it) {
+        auto operation=it.value().toObject(); operation.insert(QStringLiteral("reason"),QStringLiteral("Draft copied binding; verify on the target model")); it.value()=operation;
+    }
+    capabilities.insert(QStringLiteral("operations"),operations);
+    candidate.insert(QStringLiteral("capabilities"),capabilities);
+    candidate.insert(QStringLiteral("profileVersion"),QStringLiteral("1.0.0"));
+    if(!parseRoot(candidate,error)) return false;
+    path_.clear(); explicitDisplayName_=true;
+    return true;
+}
+
+bool CameraProfileDocument::setSonyUdpSettings(int port, int localPort, int gapMs, int resetMs, int timeoutMs, QString *error)
+{
+    if (!supportsSonyViscaUdp()) {
+        setError(error, QStringLiteral("This profile does not use the Sony UDP driver"));
+        return false;
+    }
+    auto candidate = root_;
+    auto connections = candidate.value(QStringLiteral("connections")).toArray();
+    for (int i = 0; i < connections.size(); ++i) {
+        auto connection = connections[i].toObject();
+        if (connection.value(QStringLiteral("driver")).toString() != QStringLiteral("sony-visca-udp")) continue;
+        connection.insert(QStringLiteral("defaultPort"), port);
+        auto udp = connection.value(QStringLiteral("udp")).toObject();
+        udp.insert(QStringLiteral("localPort"), localPort);
+        udp.insert(QStringLiteral("minimumRequestGapMs"), gapMs);
+        udp.insert(QStringLiteral("resetSetupMs"), resetMs);
+        connection.insert(QStringLiteral("udp"), udp);
+        connection.insert(QStringLiteral("tuning"), QJsonObject{{QStringLiteral("minimumRequestGapMs"),gapMs}});
+        auto response = connection.value(QStringLiteral("response")).toObject();
+        response.insert(QStringLiteral("timeoutMs"), timeoutMs);
+        connection.insert(QStringLiteral("response"), response);
+        connections[i] = connection;
+    }
+    candidate.insert(QStringLiteral("connections"), connections);
+    return parseRoot(candidate, error);
 }
 
 QString CameraProfileDocument::id() const
@@ -287,6 +533,20 @@ bool CameraProfileDocument::supportsRawViscaTcp() const
 	}
 	return false;
 }
+
+QJsonObject CameraProfileDocument::sonyUdpConnection() const
+{
+    for (const auto &value : root_.value(QStringLiteral("connections")).toArray()) {
+        const auto c = value.toObject();
+        if (c.value(QStringLiteral("protocol")).toString() == QStringLiteral("visca") &&
+            c.value(QStringLiteral("transport")).toString() == QStringLiteral("udp") &&
+            c.value(QStringLiteral("framing")).toString() == QStringLiteral("visca-ip-header") &&
+            c.value(QStringLiteral("driver")).toString() == QStringLiteral("sony-visca-udp"))
+            return c;
+    }
+    return {};
+}
+bool CameraProfileDocument::supportsSonyViscaUdp() const { return !sonyUdpConnection().isEmpty(); }
 
 QStringList CameraProfileDocument::connectionIds() const
 {
@@ -494,3 +754,4 @@ bool viscaCommandWaitsForCompletion(const QString &commandId)
 }
 
 } // namespace simplecam
+

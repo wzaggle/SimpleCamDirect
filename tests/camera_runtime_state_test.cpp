@@ -108,3 +108,4 @@ int main(int argc, char **argv)
     std::cout << checks << " checks, " << failures << " failures\n";
     return failures ? 1 : 0;
 }
+

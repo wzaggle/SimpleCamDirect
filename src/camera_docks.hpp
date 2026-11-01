@@ -42,6 +42,7 @@ public:
 
 private:
 	friend class CameraControlDock;
+    friend class PresetEditingTest;
 	enum class Mode { Recall, Set, Rename, Swap, Clear };
 
 	void buildUi();
@@ -194,8 +195,7 @@ private:
 	QComboBox *cameraFeedSourceSelector_ = nullptr;
 	QLineEdit *cameraNameEdit_ = nullptr;
 	QLineEdit *hostEdit_ = nullptr;
-	QSpinBox *portSpin_ = nullptr;
-	QSpinBox *addressSpin_ = nullptr;
+    QLabel *connectionSummary_ = nullptr;
 	QLabel *capacityLabel_ = nullptr;
 	QLabel *statusLabel_ = nullptr;
 	QString builtInProfileDirectory_;

@@ -105,6 +105,7 @@ int main(int argc, char **argv)
     check(a.lastZoomSliderValue() == -1 && b.lastZoomSliderValue() == -1, "no invented zoom before inquiry");
     // Group two must resolve to physical preset 15 on both cameras.
     a.setActivePage(1);
+    a.presets().setLabel(1,0,"A first"); a.presets().setLabel(1,1,"A second"); b.presets().setLabel(0,0,"B recall");
     bool firstA = false, secondA = false, doneB = false, sawConcurrent = false;
     int aZoom = -1, bZoom = -1;
     a.setZoomPositionObserver([&](int value) { aZoom = value; });
@@ -210,3 +211,4 @@ int main(int argc, char **argv)
     std::cout << checks << " checks, " << failures << " failures\n";
     return failures ? 1 : 0;
 }
+

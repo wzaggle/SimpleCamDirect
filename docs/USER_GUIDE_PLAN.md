@@ -63,3 +63,55 @@ New preset sources needing numbers and Make independent copy reuse the lowest
 free suffix, starting at (2), within the same preset-request name. References to
 one source keep one identity, and orange names still occupy their numbers.
 Existing identities are not compacted. See PRESET_SUFFIX_018.md.
+
+
+## Sony UDP v0.1.9 first integration
+
+See [SONY_UDP_019.md](SONY_UDP_019.md). Windows local build/OBS/camera acceptance
+is pending. Only zoom/STOP/readback and read-only power connection tests are in
+scope. Per-slot listening port, minimum request gap and reply timeout are separate
+UDP settings. Mac M1/Ubuntu validation follows Windows. No cloud jobs requested.
+
+
+## Sony v0.1.10 profile-owned requirements
+
+Supersedes v0.1.9 editable UDP settings. See [SONY_UDP_020.md](SONY_UDP_020.md).
+Zoom in OBS is maintainer-confirmed. Added functions and 255-preset IP range await
+hardware acceptance; capacity is maintainer-reported. Windows first, then M1/Ubuntu.
+
+
+## v0.1.11 Sony UDP Profile Test
+
+See [PROFILE_TOOL_021.md](PROFILE_TOOL_021.md). Test Open JSON, Sony port/timing
+draft fields, Test UDP / Power, Render/Send, Save As and explicit catalog refresh/
+profile selection. Verify normal controls are temporarily blocked for the tested
+camera, other IPs remain independent, and Stop & Release/close restores control.
+Begin with Power and Zoom Inquiry, then intentional movement and one disposable
+preset. Test All requires its existing movement/state/preset confirmation. Check
+Norton access for OBS itself; close the standalone probe. Repeat TCP smoke tests.
+Windows VS/OBS first; Mac M1 and Ubuntu follow Windows acceptance.
+
+
+## v0.1.12 Camera Profiler update
+
+See [CAMERA_PROFILER_012.md](CAMERA_PROFILER_012.md). Camera Profiler replaces the
+slot selector/Apply controls with independent name/model, load/New draft/Save As,
+three explicit network methods and separate profile tuning. Saved profiles are
+chosen in Cameras. Test IP stays private to the test session. New Profile uses
+the loaded bindings/ranges as a starting template; full JSON/range authoring and
+community submissions remain future work. Test Windows RelWithDebInfo/OBS first,
+then M1 and Ubuntu. Repeat Sony and legacy TCP smoke tests; raw UDP requires its
+own hardware acceptance. Preserve test ownership, Stop & Release and saved names.
+
+
+## v0.1.13 profile/installation layout
+
+See [PROFILE_LAYOUT_013.md](PROFILE_LAYOUT_013.md). Profile name/revision/file,
+manufacturer/model/method/ports/address/tuning live in the upper Profiler Profile
+area; Test Connection edits only temporary IP. Cameras has no port/address editors.
+Verify read-only connection summary, legacy endpoint migration/restart/reuse and
+preservation of names/IP/video/presets. Check UDP same/fixed receive-port policy
+and method-dependent visibility, and Sony port/timing regression. Windows local
+RelWithDebInfo/OBS first, then M1 and Ubuntu. Serial remains future work.
+
+See PRESET_EDITING_014.md for v0.1.14 Rename and unnamed-preset acceptance checks.

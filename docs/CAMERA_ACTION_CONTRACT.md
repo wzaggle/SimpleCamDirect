@@ -66,3 +66,4 @@ There is one profile format for shipped models and user-created/customized profi
 - Test recall with speed and without speed, plus models whose profile declares no speed support. For common-speed devices, verify queue serialization and restore behavior; for per-preset speed devices, verify the target slot and camera-side persistence.
 - Use manufacturer documentation and packet fixtures for protocol tests; use real hardware evidence before labeling the speed capability hardware-tested.
 - Confirm that a speed setting on one scene source does not alter another source's saved value. If the camera supports only a global/common speed, serialize the temporary change with recall and restore the configured common default afterward when the protocol allows it; otherwise clearly expose the shared behavior and its limitation.
+

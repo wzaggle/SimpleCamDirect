@@ -129,3 +129,27 @@ No profile may execute Lua, Python, shell commands, compiled code, arbitrary loo
 - The precise JSON editor library and how diagnostics synchronize with the structured form.
 - Exact VISCA sequence-step schema and supported operation bindings for the first implementation.
 - Later ONVIF and NDI PTZ structured editor fields and the supported NDI metadata subset.
+
+
+
+## v0.1.12 Camera Profiler update
+
+See [CAMERA_PROFILER_012.md](CAMERA_PROFILER_012.md). Camera Profiler replaces the
+slot selector/Apply controls with independent name/model, load/New draft/Save As,
+three explicit network methods and separate profile tuning. Saved profiles are
+chosen in Cameras. Test IP stays private to the test session. New Profile uses
+the loaded bindings/ranges as a starting template; full JSON/range authoring and
+community submissions remain future work. Test Windows RelWithDebInfo/OBS first,
+then M1 and Ubuntu. Repeat Sony and legacy TCP smoke tests; raw UDP requires its
+own hardware acceptance. Preserve test ownership, Stop & Release and saved names.
+
+
+## v0.1.13 profile/installation layout
+
+See [PROFILE_LAYOUT_013.md](PROFILE_LAYOUT_013.md). Profile name/revision/file,
+manufacturer/model/method/ports/address/tuning live in the upper Profiler Profile
+area; Test Connection edits only temporary IP. Cameras has no port/address editors.
+Verify read-only connection summary, legacy endpoint migration/restart/reuse and
+preservation of names/IP/video/presets. Check UDP same/fixed receive-port policy
+and method-dependent visibility, and Sony port/timing regression. Windows local
+RelWithDebInfo/OBS first, then M1 and Ubuntu. Serial remains future work.

@@ -1001,6 +1001,7 @@ void CameraControlCard::buildUi()
 	arrowGridWidget->setFixedSize(arrowGridSize, arrowGridSize);
 	auto addArrow = [this, arrowGridWidget](int row, int column, const QString &icon, int pan, int tilt) {
 		auto *button = new QPushButton(arrowGridWidget);
+        button->setProperty("simplecamCommand",QStringLiteral("movePanTilt"));
 		button->setFixedSize(35, 35);
 		button->move(column * arrowStep, row * arrowStep);
 		button->setIcon(directionIcon(icon));
@@ -1017,6 +1018,7 @@ void CameraControlCard::buildUi()
 	addArrow(0, 2, QStringLiteral("arrow2"), 2, 1);
 	addArrow(1, 0, QStringLiteral("arrow7"), 1, 3);
 	auto *homeButton = new QPushButton(arrowGridWidget);
+    homeButton->setProperty("simplecamCommand",QStringLiteral("home"));
 	homeButton->setFixedSize(35, 35);
 	homeButton->move(arrowStep, arrowStep);
 	homeButton->setIcon(homeIcon());
@@ -1064,7 +1066,9 @@ void CameraControlCard::buildUi()
 	zoomLabels->setContentsMargins(0, 0, 0, 0);
 	zoomLabels->setSpacing(0);
 	auto *zoomIn = new QPushButton(QStringLiteral("+"), this);
+    zoomIn->setProperty("simplecamCommand",QStringLiteral("zoomIn"));
 	auto *zoomOut = new QPushButton(QStringLiteral("−"), this);
+    zoomOut->setProperty("simplecamCommand",QStringLiteral("zoomOut"));
 	zoomIn->setFixedSize(22, 20);
 	zoomOut->setFixedSize(22, 20);
 	zoomIn->setStyleSheet(QStringLiteral("QPushButton { color:#48A9F0; background:transparent; border:0; font-size:18px; font-weight:bold; padding:0px; }"));
@@ -1318,6 +1322,18 @@ void CameraControlCard::refresh()
 	cameraTitle_->setText(runtime_->isEnabled() ? runtime_->cameraName() : QStringLiteral("No cameras enabled"));
 	updateCameraTitleStyle();
 	const bool profileLoaded = runtime_->hasLoadedProfile();
+    for (auto *button : findChildren<QPushButton *>()) {
+        const auto command = button->property("simplecamCommand").toString();
+        if (!command.isEmpty()) button->setEnabled(runtime_->supportsCommand(command));
+    }
+    manualFocusButton_->setEnabled(runtime_->supportsCommand(QStringLiteral("focusManual")));
+    backlightButton_->setEnabled(runtime_->supportsCommand(QStringLiteral("backlightOn")));
+    exposureButton_->setEnabled(runtime_->supportsCommand(QStringLiteral("exposureCompOn")));
+    powerButton_->setEnabled(runtime_->supportsCommand(QStringLiteral("powerOn")));
+    setButton_->setEnabled(runtime_->supportsCommand(QStringLiteral("presetStore")));
+    focusMinusButton_->setEnabled(runtime_->supportsCommand(QStringLiteral("focusNear")) && manualFocusButton_->isChecked());
+    focusPlusButton_->setEnabled(runtime_->supportsCommand(QStringLiteral("focusFar")) && manualFocusButton_->isChecked());
+
 	const int absoluteZoomTemplates = runtime_->zoomAbsoluteTemplateCount();
 	const bool zoomPositionAvailable = runtime_->canSetZoomPosition();
 	zoomSlider_->setEnabled(zoomPositionAvailable);
@@ -1408,9 +1424,10 @@ void CameraControlCard::refresh()
 		// Names can be edited before a physical preset is assigned on newly added
 		// pages. Keep those names visible; reserve --- for an unnamed, unmapped slot.
 		button->setText(!slot.label.trimmed().isEmpty() || usable ? slot.label : QStringLiteral("---"));
-		button->setToolTip(usable ? QStringLiteral("Physical camera preset %1").arg(slot.physicalPreset)
+        if(usable && slot.label.trimmed().isEmpty()) button->setToolTip(QStringLiteral("Name this preset button to enable recall; Set and Rename remain available"));
+        else button->setToolTip(usable ? QStringLiteral("Physical camera preset %1").arg(slot.physicalPreset)
 					    : QStringLiteral("No physical preset mapped"));
-		button->setEnabled(mode_ != Mode::Recall || usable);
+		button->setEnabled(mode_ != Mode::Recall || runtime_->canRecallPreset(pageIndex,slotIndex));
 		// The flash color is painted on top of the button, so updating its base
 		// stylesheet during the flash does not interrupt the visible confirmation.
 		// Keeping every preset button on the same stylesheet also keeps their
@@ -1457,11 +1474,16 @@ void CameraControlCard::setMode(Mode mode)
 
 void CameraControlCard::beginPresetRename(int slotIndex)
 {
-	finishPresetRename(false);
+    if(renameSlot_==slotIndex && renameRuntime_==runtime_ && renamePage_==runtime_->activePage()) {
+        presetNameEditor_->setFocus(); return;
+    }
+    // Commit the previous button before replacing its editor; continue Rename mode.
+	finishPresetRename(true);
 	renameRuntime_ = runtime_;
 	renamePage_ = runtime_->activePage();
 	renameSlot_ = slotIndex;
 	mode_ = Mode::Rename;
+    refresh(); // Re-enable blank buttons for continued naming after the prior commit.
 	auto *button = presetButtons_.at(slotIndex);
 	presetNameEditor_->setParent(button);
 	presetNameEditor_->setGeometry(button->rect().adjusted(1, 1, -1, -1));
@@ -1635,7 +1657,7 @@ void CameraControlCard::handlePresetButton(int slotIndex)
 		flashPresetButton(slotIndex);
 		return;
 	case Mode::Recall: {
-		if (!runtime_->hasUsablePreset(pageIndex, slotIndex)) {
+		if (!runtime_->canRecallPreset(pageIndex, slotIndex)) {
 			setStatus(QStringLiteral("This button has no usable preset mapping for the selected camera profile"), true);
 			return;
 		}
@@ -2670,12 +2692,6 @@ CamerasTool::CamerasTool(const CameraRuntimeArray &runtimes, const QString &buil
 	cameraNameEdit_->setMaxLength(40);
 	hostEdit_ = new QLineEdit(runtimes_[0]->host(), this);
 	hostEdit_->setPlaceholderText(QStringLiteral("Camera IP address"));
-	portSpin_ = new QSpinBox(this);
-	portSpin_->setRange(1, 65535);
-	portSpin_->setValue(runtimes_[0]->port());
-	addressSpin_ = new QSpinBox(this);
-	addressSpin_->setRange(1, 7);
-	addressSpin_->setValue(runtimes_[0]->cameraAddress());
 	capacityLabel_ = new QLabel(this);
 	capacityLabel_->setToolTip(QStringLiteral("Preset capacity is defined by the selected camera profile."));
 	auto *profileRow = new QWidget(this);
@@ -2693,13 +2709,14 @@ CamerasTool::CamerasTool(const CameraRuntimeArray &runtimes, const QString &buil
 	form->addRow(QStringLiteral("Camera profile"), profileRow);
 	form->addRow(QStringLiteral("Camera name"), cameraNameEdit_);
 	form->addRow(QStringLiteral("Network IP"), hostEdit_);
-	form->addRow(QStringLiteral("TCP port"), portSpin_);
-	form->addRow(QStringLiteral("VISCA address"), addressSpin_);
+    connectionSummary_=new QLabel(this); connectionSummary_->setWordWrap(true);
+    connectionSummary_->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    form->addRow(QStringLiteral("Connection"),connectionSummary_);
 	form->addRow(QStringLiteral("Preset capacity"), capacityLabel_);
 	root->addLayout(form);
 
-	auto *testButton = new QPushButton(QStringLiteral("Test TCP connection"), this);
-	statusLabel_ = new QLabel(QStringLiteral("Enter the camera address. The test sends no PTZ command."), this);
+	auto *testButton = new QPushButton(QStringLiteral("Test connection"), this);
+	statusLabel_ = new QLabel(QStringLiteral("TCP tests connection only; UDP sends a read-only power inquiry."), this);
 	statusLabel_->setWordWrap(true);
 	root->addWidget(testButton);
 	root->addWidget(statusLabel_);
@@ -2715,26 +2732,19 @@ CamerasTool::CamerasTool(const CameraRuntimeArray &runtimes, const QString &buil
 	});
 	QObject::connect(cameraSelector_, qOverload<int>(&QComboBox::currentIndexChanged), this,
 			 [this](int) { loadSelectedCamera(); });
-	QObject::connect(profileSelector_, qOverload<int>(&QComboBox::currentIndexChanged), this,
-			 [this](int index) {
-				if (index < 0)
-					return;
-				CameraRuntime &selected = *runtimes_[cameraSelector_->currentIndex()];
-				const QString path = profileSelector_->itemData(index).toString();
-				if (path.isEmpty() || path == selected.profilePath())
-					return;
-				QString error;
-				if (!selected.setProfilePath(path, &error)) {
-					statusLabel_->setText(error);
-					loadSelectedCamera();
-					return;
-				}
-				updateProfileSummary(selected);
-				statusLabel_->setText(QStringLiteral("Using %1 for %2").arg(selected.profileDisplayName(), selected.cameraName()));
-				refreshPresetSourceNames();
-				if (refreshControls_)
-					refreshControls_();
-			});
+    QObject::connect(profileSelector_,qOverload<int>(&QComboBox::currentIndexChanged),this,[this](int index) {
+        if(index<0) return;
+        CameraRuntime &selected=*runtimes_[cameraSelector_->currentIndex()];
+        const QString path=profileSelector_->itemData(index).toString();
+        if(path.isEmpty() || path==selected.profilePath()) return;
+        QString error;
+        if(!selected.setProfilePath(path,&error)) { loadSelectedCamera(); statusLabel_->setText(error); return; }
+        const bool migrated=selected.migrateLegacyConnection(userProfileDirectory_,&error);
+        refreshProfileList();
+        statusLabel_->setText(migrated ? QStringLiteral("Using %1 for %2").arg(selected.profileDisplayName(),selected.cameraName()) :
+            QStringLiteral("Existing endpoint retained: %1").arg(error));
+        refreshPresetSourceNames(); if(refreshControls_) refreshControls_();
+    });
 	QObject::connect(refreshProfilesButton, &QPushButton::clicked, this, [this]() { refreshProfileList(); });
 	QObject::connect(refreshFeedSourcesButton, &QPushButton::clicked, this,
 			 [this]() { refreshCameraFeedSourceList(); });
@@ -2759,10 +2769,6 @@ CamerasTool::CamerasTool(const CameraRuntimeArray &runtimes, const QString &buil
 			});
 	QObject::connect(hostEdit_, &QLineEdit::editingFinished, this,
 			 [this]() { runtimes_[cameraSelector_->currentIndex()]->setHost(hostEdit_->text()); });
-	QObject::connect(portSpin_, qOverload<int>(&QSpinBox::valueChanged), this,
-			 [this](int port) { runtimes_[cameraSelector_->currentIndex()]->setPort(static_cast<quint16>(port)); });
-	QObject::connect(addressSpin_, qOverload<int>(&QSpinBox::valueChanged), this,
-			 [this](int address) { runtimes_[cameraSelector_->currentIndex()]->setCameraAddress(address); });
 	QPointer<CamerasTool> self(this);
 	QObject::connect(testButton, &QPushButton::clicked, this, [this, self]() {
 		runtimes_[cameraSelector_->currentIndex()]->testConnection([self](bool ok, const QString &message) {
@@ -2797,7 +2803,7 @@ void CamerasTool::refreshProfileList()
 				continue;
 			CameraProfileDocument profile;
 			QString error;
-			if (!profile.load(path, &error) || !profile.supportsRawViscaTcp() || profile.presetCapacity() < 1)
+			if (!profile.load(path, &error) || !profile.supportsRuntimeConnection() || profile.presetCapacity() < 1)
 				continue;
 			const int index = profileSelector_->count();
 			profileSelector_->addItem(profile.displayName(), path);
@@ -2836,13 +2842,10 @@ void CamerasTool::loadSelectedCamera()
 	CameraRuntime &selected = *runtimes_[cameraSelector_->currentIndex()];
 	const QSignalBlocker blockEnabled(cameraEnabled_);
 	cameraEnabled_->setChecked(selected.isEnabled());
-	const QSignalBlocker blockPort(portSpin_);
-	const QSignalBlocker blockAddress(addressSpin_);
 	const QSignalBlocker blockProfile(profileSelector_);
+    connectionSummary_->setText(selected.connectionSummary());
 	cameraNameEdit_->setText(selected.cameraName());
 	hostEdit_->setText(selected.host());
-	portSpin_->setValue(selected.port());
-	addressSpin_->setValue(selected.cameraAddress());
 	refreshCameraFeedSourceList();
 	int profileIndex = -1;
 	for (int index = 0; index < profileSelector_->count(); ++index) {

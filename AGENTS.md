@@ -1,5 +1,80 @@
 # Instructions for coding agents
 
+## v0.2.0 four-platform packaging
+
+Read docs/RELEASE_020.md. The maintainer now authorizes GitHub synchronization
+and all four native installer builds, superseding earlier no-cloud iteration
+restrictions for this task. Preserve the v0.1.14 runtime baseline. Intel and M1
+need separate native builds/dependencies/packages. Do not deploy or publish a
+public release. Production remains on v0.1.8; native acceptance is pending.
+
+
+## Preset editing (v0.1.14; Windows acceptance pending)
+
+Read docs/PRESET_EDITING_014.md. Save Rename when moving between buttons; Enter
+saves/exits and Escape discards current edit. Blank names block dock/source
+recall, including queued TCP/UDP sends, but Set and Rename remain available.
+Do not auto-name newly stored mappings. Preserve camera memory and mappings.
+Keep one local receive-port checkbox caption. No GitHub writes until MARK IT.
+
+
+## Profile/installation split (v0.1.13; Windows acceptance pending)
+
+Read docs/PROFILE_LAYOUT_013.md. Keep all profile metadata/ports/address/tuning in
+Profiler upper Profile area; Test Connection edits only temporary IP. Cameras has
+no port/address editors, only a read-only connection summary. Preserve legacy TCP
+ports/addresses through user-profile migration before startup IO, including reuse,
+restart and failure without endpoint loss. Keep installation names/IP/feed and
+preset catalogs intact. Local UDP port may follow the camera port or be fixed;
+never confuse it with reply source port. Profile revision is independent of plugin/
+schema versions. Sony wire behavior is unchanged. No GitHub writes or cloud jobs
+until requested; full source project / local Windows RelWithDebInfo first.
+
+## Independent Camera Profiler (v0.1.12; Windows acceptance pending)
+
+Read docs/CAMERA_PROFILER_012.md. Profiler is independent of slots: custom display
+name/model, New draft, load/render/test/Save As; no Apply to Slot. Keep the three
+explicit methods raw TCP, raw UDP and Sony-framed UDP separate from profile-owned
+ports/timings. Never infer method from port or impose SRG-300H ranges on every
+Sony-framed profile. Preserve the tested SRG profile, legacy TCP slot endpoints,
+test ownership/Stop & Release, async pacing and draft/evidence boundaries. New
+raw profiles are selectable by Cameras and run through the shared runtime.
+No GitHub write until MARK IT; no cloud builds; full project for local VS first.
+
+## Sony UDP Profile Test (v0.1.11; local Windows testing pending)
+
+Read docs/PROFILE_TOOL_021.md. Profile Test now edits profile-owned Sony ports/
+timings and uses the shared UDP adapter. Preserve temporary per-camera ownership,
+STOP/release/cancel and draft Save As boundaries; never persist test suspension or
+replay blocked scene requests. Individual Sony tests never auto-wake. TCP retains
+its existing behavior. Maintainer reports v0.1.10 works well; new Profile Test
+hardware checks pending. No cloud builds or GitHub writes until requested.
+
+## Sony profile-owned connection requirements (v0.1.10; Windows testing pending)
+
+Read docs/SONY_UDP_020.md. Maintainer confirms v0.1.9 zoom in OBS. Engineered UDP
+ports/address/framing/timing/ranges belong to the reusable Sony profile; installation
+slots provide name/IP/profile/video mapping only. Do not restore v0.1.9 editable UDP
+overrides. Separate transport variants use separate profiles. Preserve raw TCP.
+New SimpleCam VISCA bindings await hardware validation. IP preset capacity 255 is
+maintainer-reported, high-index store/recall untested; do not call it independently
+manufacturer-verified. Clear stays label-only. Keep explicit priority STOP and
+track active pan/tilt/focus/zoom for failure/disable/unload stops. No GitHub write
+until MARK IT, no cloud builds; source overlay for local VS first.
+
+
+## Sony UDP first integration (v0.1.9; Windows acceptance pending)
+
+Read docs/SONY_UDP_019.md. Keep raw TCP transport unchanged. Named Sony UDP adapter
+uses shared listeners by local port, sender-IP/sequence filtering, any reply source
+port, reset ACK + 100 ms setup, configurable per-slot gap/timeout, and priority STOP.
+Only probe-backed zoom/STOP/readback and power inquiry bindings are enabled in the
+Sony profile. Other actions are absent and unavailable. Do not claim full Sony
+support from the standalone probe or simulator. Do not add sleeps to OBS threads.
+Keep the v0.1.8 allocator and accepted ON-AIR/Properties behavior. Source overlay/local
+VS first; no GitHub writes until MARK IT and no cloud jobs.
+
+
 ## Lowest unused preset suffix (v0.1.8; local VS/OBS validation pending)
 
 New preset sources needing a suffix and Make independent copy share the gap-filling

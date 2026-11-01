@@ -3,6 +3,8 @@
 #include "camera_profile.hpp"
 
 #include <QObject>
+#include <QPointer>
+#include <QElapsedTimer>
 #include <QByteArray>
 #include <QQueue>
 #include <QSettings>
@@ -19,6 +21,7 @@ class QTcpSocket;
 namespace simplecam {
 
 class CameraRuntime;
+class ViscaUdpTransport;
 inline constexpr int CameraSlotCount = 5;
 using CameraRuntimeArray = std::array<CameraRuntime *, CameraSlotCount>;
 
@@ -82,12 +85,14 @@ public:
 		bool waitForCompletion = false;
 		std::function<void(const QByteArray &)> onReply;
 		int completionTimeoutMs = 2500;
+        std::function<bool()> canSend;
 	};
 
 	explicit ViscaTcpTransport(QObject *parent = nullptr);
 
 	void setEnabled(bool enabled);
 	void setEndpoint(const QString &host, quint16 port, int cameraAddress);
+    void setRequestGap(int gapMs) { requestGapMs_ = gapMs; }
 	void enqueue(const QVector<FrameCommand> &commands, Completion completion = {}, int delayBeforeMs = 0);
 	void testConnection(Completion completion);
 
@@ -119,6 +124,8 @@ private:
 	bool busy_ = false;
 	bool enabled_ = true;
 	unsigned long long requestGeneration_ = 0;
+    int requestGapMs_ = 0;
+    QElapsedTimer lastReply_;
 };
 
 class CameraRuntime final : public QObject {
@@ -140,8 +147,21 @@ public:
 	QString host() const;
 	quint16 port() const;
 	int cameraAddress() const;
+    bool acquireProfileTest(QObject *owner);
+    void releaseProfileTest(QObject *owner);
+    bool profileTestActive() const { return !profileTestOwner_.isNull(); }
+    bool usesSonyUdp() const;
+    bool usesUdp() const;
+    bool migrateLegacyConnection(const QString &directory, QString *error=nullptr);
+    QString connectionSummary() const;
+    bool profileOwnsConnection() const { return profile_.profileOwnsConnection(); }
+    quint16 udpLocalPort() const;
+    int requestGapMs() const;
+    int replyTimeoutMs() const;
+    bool supportsCommand(const QString &id) const;
 	int capacity() const;
 	bool hasUsablePreset(int pageIndex, int slotIndex) const;
+    bool canRecallPreset(int pageIndex,int slotIndex) const;
 	QString profilePath() const;
 	QString profileId() const;
 	QString profileDisplayName() const;
@@ -194,10 +214,13 @@ private:
 	void sendProfileCommand(const QString &commandId, const ViscaTemplateValues &values,
 				Completion completion, int delayBeforeMs = 0);
 	void appendZoomInquiry(QVector<ViscaTcpTransport::FrameCommand> &commands);
-	void sendPresetRecallAndZoomInquiry(int physicalPreset, int delayMs, Completion completion);
+	void sendPresetRecallAndZoomInquiry(int physicalPreset, int delayMs, Completion completion, std::function<bool()> canSend = {});
 	bool handleZoomInquiryReply(const QByteArray &reply);
 	void scheduleZoomInitialization();
 	void queryZoomPosition(Completion completion);
+    void configureTransport();
+    void enqueueCommands(const QVector<ViscaTcpTransport::FrameCommand> &commands, Completion completion = {},
+                         int delayBeforeMs = 0, bool priorityStop = false);
 	void writeCameraSettings();
 	int resolvePhysicalPreset(int pageIndex, int slotIndex) const;
 
@@ -223,9 +246,13 @@ private:
 	PresetCatalog presets_;
 	CameraRuntime *sharedPresetOwner_ = nullptr;
 	ViscaTcpTransport transport_;
+    ViscaUdpTransport *udpTransport_ = nullptr;
+    QPointer<QObject> profileTestOwner_;
+    QMetaObject::Connection profileTestDestroyed_;
 };
 
 CameraRuntime *cameraRuntime(int cameraIndex = 0);
 void setCameraRuntime(int cameraIndex, CameraRuntime *runtime);
 
 } // namespace simplecam
+

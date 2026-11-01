@@ -7,12 +7,13 @@ from pathlib import Path
 PLATFORMS = [
     {'platform': 'windows', 'runner': 'windows-2022'},
     {'platform': 'macos', 'runner': 'macos-26'},
+    {'platform': 'macos-intel', 'runner': 'macos-26-intel'},
     {'platform': 'linux', 'runner': 'ubuntu-24.04'},
 ]
 
 
 def matrix_for(selection):
-    if selection not in ('all', 'windows', 'macos', 'linux'):
+    if selection not in ('all', 'windows', 'macos', 'macos-intel', 'linux'):
         raise ValueError('Unknown build platform: ' + selection)
     return {'include': [entry for entry in PLATFORMS
                         if selection == 'all' or entry['platform'] == selection]}

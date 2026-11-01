@@ -32,6 +32,18 @@ public:
 	bool loadBytes(const QByteArray &bytes, QString *error = nullptr);
 	bool saveAs(const QString &path, QString *error = nullptr);
 
+    bool setProfilerSettings(const QString &name, const QString &method, int port, int localPort,
+        int gapMs, int resetMs, int timeoutMs, int address, QString *error = nullptr);
+    QString profileVersion() const;
+    bool setProfileVersion(const QString &version, QString *error=nullptr);
+    bool setLocalPortPolicy(bool sameAsCamera, QString *error=nullptr);
+    bool setIdentity(const QString &manufacturer,const QString &model,QString *error=nullptr);
+    bool newDraft(QString *error = nullptr);
+    QString networkMethod() const;
+    QJsonObject networkConnection() const;
+    bool supportsRawViscaUdp() const;
+    bool profileOwnsConnection() const;
+	bool setSonyUdpSettings(int port, int localPort, int gapMs, int resetMs, int timeoutMs, QString *error = nullptr);
 	QString path() const { return path_; }
 	bool isValid() const { return !root_.isEmpty(); }
 	QString id() const;
@@ -39,6 +51,9 @@ public:
 	int presetCapacity() const;
 	int nativeZoomMaximum() const;
 	bool supportsRawViscaTcp() const;
+    bool supportsSonyViscaUdp() const;
+    bool supportsRuntimeConnection() const { return supportsRawViscaTcp() || supportsSonyViscaUdp() || supportsRawViscaUdp(); }
+    QJsonObject sonyUdpConnection() const;
 	QJsonObject root() const { return root_; }
 	QStringList connectionIds() const;
 	QString connectionLabel(const QString &id) const;
@@ -54,6 +69,7 @@ private:
 	bool parseRoot(const QJsonObject &root, QString *error);
 	QJsonObject root_;
 	QString path_;
+    bool explicitDisplayName_ = false;
 };
 
 bool renderViscaTemplate(const QString &commandTemplate, const ViscaTemplateValues &values,
@@ -63,3 +79,4 @@ bool renderViscaTemplates(const QStringList &templates, const ViscaTemplateValue
 bool viscaCommandWaitsForCompletion(const QString &commandId);
 
 } // namespace simplecam
+

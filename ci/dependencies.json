@@ -15,5 +15,17 @@
       "url": "https://github.com/obsproject/obs-deps/releases/download/2026-07-15/macos-deps-qt6-2026-07-15-arm64.tar.xz",
       "sha256": "184538177d854664c56e8524e1afb2b6156083579426f3193e90c6cf4d514583"
     }
+  ],
+  "macos-intel": [
+    {
+      "name": "prebuilt",
+      "url": "https://github.com/obsproject/obs-deps/releases/download/2026-07-15/macos-deps-2026-07-15-x86_64.tar.xz",
+      "sha256": "d301f9866f049f8667d45ffbf741b3074af5a19f50a68f4021a3aae9c12ef5cc"
+    },
+    {
+      "name": "qt6",
+      "url": "https://github.com/obsproject/obs-deps/releases/download/2026-07-15/macos-deps-qt6-2026-07-15-x86_64.tar.xz",
+      "sha256": "5e137db187f9acb420d7ea079b4fe60e0a0d23e9e1c80a2b9597130a7e6923a5"
+    }
   ]
 }

@@ -1,3 +1,25 @@
+# SimpleCamPTZ v0.2.0 — complete source project
+
+Open this folder in Visual Studio and build/install **windows-x64 / RelWithDebInfo**
+with OBS closed. Confirm dock version **v0.2.0**. A fresh CMake configure downloads
+the pinned build dependencies; Debug is unsuitable for normal OBS installations.
+
+Preset Rename now saves edits when you select the next button. Blank or
+whitespace-only names block recalls from both the dock and OBS sources; Set and
+Rename remain available. Delayed recalls also recheck the name and mapping
+before transmission. The Profiler has one receive-port checkbox caption.
+
+See [docs/PRESET_EDITING_014.md](docs/PRESET_EDITING_014.md) for behavior and local
+acceptance checks. Automated widget and localhost checks pass; native Windows,
+OBS/hardware and Mac M1/Ubuntu acceptance remain pending.
+Four-platform installer builds are authorized for this test release.
+See docs/RELEASE_020.md for architecture-specific packages and acceptance.
+
+The earlier README follows for build background; older slot/port/Profile Test
+statements are superseded by the current layout document.
+
+---
+
 # SimpleCamPTZ for OBS
 
 **Release candidate:** Windows x64, OBS Studio 32.2.1, AViPAS AV-1280W over raw VISCA/TCP. This is intended for production-equipment testing; it is not yet a general multi-camera or cross-platform release.

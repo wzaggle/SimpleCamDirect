@@ -1,12 +1,15 @@
 #include "profile_test_tool.hpp"
 
 #include "camera_runtime.hpp"
+#include "visca_udp_transport.hpp"
 
 #include <QApplication>
+#include <QJsonDocument>
 #include <QAbstractItemView>
 #include <QBrush>
 #include <QColor>
 #include <QComboBox>
+#include <QCheckBox>
 #include <QCloseEvent>
 #include <QDateTime>
 #include <QDir>
@@ -42,6 +45,12 @@ namespace {
 QString hexString(const QByteArray &bytes)
 {
 	return QString::fromLatin1(bytes.toHex(' ').toUpper());
+}
+
+bool isViscaStop(const QByteArray &packet)
+{
+    return (packet.size()==6 && (packet.mid(1)==QByteArray::fromHex("01040700ff") || packet.mid(1)==QByteArray::fromHex("01040800ff"))) ||
+        (packet.size()==9 && packet.mid(1,3)==QByteArray::fromHex("010601") && packet.mid(6,2)==QByteArray::fromHex("0303"));
 }
 
 QStringList splitTemplateLine(const QString &text)
@@ -124,7 +133,7 @@ QString describeReplies(const QVector<QByteArray> &replies)
 CameraProfileTestDialog::CameraProfileTestDialog(const QString &defaultProfilePath, QWidget *parent)
 	: QDialog(parent), defaultProfilePath_(defaultProfilePath), profile_(new CameraProfileDocument)
 {
-	setWindowTitle(QStringLiteral("SimpleCamPTZ - Camera Profile Test"));
+	setWindowTitle(QStringLiteral("SimpleCamPTZ - Camera Profiler"));
 	setMinimumSize(980, 680);
 	resize(1180, 860);
 	buildUi();
@@ -136,6 +145,7 @@ CameraProfileTestDialog::CameraProfileTestDialog(const QString &defaultProfilePa
 
 CameraProfileTestDialog::~CameraProfileTestDialog()
 {
+	releaseUdp();
 	delete profile_;
 }
 
@@ -164,86 +174,240 @@ void CameraProfileTestDialog::closeEvent(QCloseEvent *event)
 		}
 		return;
 	}
+	releaseUdp();
 	QDialog::closeEvent(event);
+}
+
+bool CameraProfileTestDialog::sonyUdp() const { return connectionVariant_->currentData().toString()==QStringLiteral("sony-visca-udp"); }
+bool CameraProfileTestDialog::udpMethod() const { return connectionVariant_->currentData().toString()!=QStringLiteral("raw-visca-tcp"); }
+bool CameraProfileTestDialog::supportedTransport() const
+{
+    const auto method=connectionVariant_->currentData().toString();
+    return method==QStringLiteral("sony-visca-udp") || method==QStringLiteral("raw-visca-udp") || method==QStringLiteral("raw-visca-tcp");
+}
+void CameraProfileTestDialog::updateConnectionUi()
+{
+    if(!udpControls_) return;
+    udpControls_->show(); releaseButton_->show();
+    localPortRow_->setVisible(udpMethod()); resetDelayRow_->setVisible(sonyUdp());
+    localPort_->setEnabled(udpMethod() && !sameLocalPort_->isChecked());
+    localPort_->setVisible(udpMethod() && !sameLocalPort_->isChecked()); resetDelay_->setEnabled(sonyUdp());
+    address_->setEnabled(!sonyUdp()); if(sonyUdp()) address_->setValue(1);
+    testConnectionButton_->setText(udpMethod() ? QStringLiteral("Test UDP") : QStringLiteral("Test TCP"));
+    connectionNote_->setText(QStringLiteral("Test IP is temporary. Profile settings above are shared by cameras using that profile."));
+}
+void CameraProfileTestDialog::newProfile()
+{
+    if(ioBusy_) return;
+    releaseUdp();
+    QString error;
+    if(!profile_->newDraft(&error)) { setStatus(error,true); return; }
+    profilePath_->clear(); profileName_->setText(profile_->displayName());
+    profileVersion_->setText(profile_->profileVersion());
+    profileInfo_->setText(QStringLiteral("New unsaved draft · JSON format 1"));
+    manufacturer_->setText(QStringLiteral("Custom")); model_->setText(QStringLiteral("Unspecified"));
+    populateCommands();
+    setStatus(QStringLiteral("New unsaved draft based on the loaded profile's commands and ranges. Verify them for your model, enter its name, select the method and tuning, then Save As."));
+}
+
+void CameraProfileTestDialog::setTestBusy(bool busy)
+{
+    ioBusy_ = busy;
+    profileControls_->setEnabled(!busy);
+    host_->setEnabled(!busy);
+    testConnectionButton_->setEnabled(!busy);
+    udpControls_->setEnabled(!busy);
+    tokenControls_->setEnabled(!busy);
+    valueControls_->setEnabled(!busy || zoomDiscoveryActive_);
+    releaseButton_->setEnabled(sessionActive_);
+    if (!busy) address_->setEnabled(!sonyUdp());
+}
+
+bool CameraProfileTestDialog::prepareUdp(QString *error)
+{
+    const QString host = host_->text().trimmed();
+    const QHostAddress target(host);
+    if(host.isEmpty()) { *error=QStringLiteral("Enter a test IP address first"); return false; }
+    if (udpMethod() && target.protocol() != QAbstractSocket::IPv4Protocol) {
+        *error = QStringLiteral("UDP tests require a numeric IPv4 address."); return false;
+    }
+    if (!applyEditsToProfile()) {
+        *error = status_->text(); return false;
+    }
+    if (sessionActive_ && (borrowedHost_ != host || (!udpMethod() && borrowedPort_ != quint16(port_->value())))) releaseUdp();
+    if (!sessionActive_) {
+        // Pause every configured matching slot, without changing persisted enabled/settings.
+        for (int index = 0; index < CameraSlotCount; ++index) {
+            auto *runtime = cameraRuntime(index);
+            if (!runtime || (runtime->host().trimmed()!=host && (target.isNull() || QHostAddress(runtime->host())!=target))) continue;
+            if (!runtime->acquireProfileTest(this)) {
+                *error = QStringLiteral("This camera is already reserved by another Camera Profiler window.");
+                releaseUdp(); return false;
+            }
+            borrowed_.append(runtime);
+        }
+        borrowedHost_ = host; borrowedPort_=static_cast<quint16>(port_->value());
+        sessionActive_=true;
+        if(udpMethod()) udp_ = new ViscaUdpTransport(this);
+        if(udp_) udp_->trace = [this](const QString &line) {
+            trace_->appendPlainText(QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss.zzz")) + QStringLiteral(" · ") + line);
+        };
+        trace_->appendPlainText(QStringLiteral("Camera Profiler owns %1; normal commands for matching slots are paused.").arg(host));
+    }
+    if(udp_) udp_->configure(host, static_cast<quint16>(port_->value()), static_cast<quint16>(localPort_->value()),
+        requestGap_->value(), replyTimeout_->value(), resetDelay_->value(), sonyUdp(), address_->value());
+    releaseButton_->setEnabled(true);
+    return true;
+}
+
+void CameraProfileTestDialog::releaseUdp()
+{
+    ++sessionGeneration_;
+    for(auto socket : tcpSockets_) if(socket) { socket->disconnect(); socket->abort(); socket->deleteLater(); }
+    tcpSockets_.clear();
+    stopTcpMovement();
+    lastTcpReply_.invalidate();
+    sessionActive_=false;
+    if (udp_) {
+        // Destruction sends best-effort stops for every active axis before releasing the listener.
+        delete udp_;
+        udp_ = nullptr;
+    }
+    for (auto runtime : borrowed_) if (runtime) runtime->releaseProfileTest(this);
+    borrowed_.clear();
+    borrowedHost_.clear();
+    if (releaseButton_) releaseButton_->setEnabled(false);
+}
+
+void CameraProfileTestDialog::stopTcpMovement()
+{
+    const auto stops=tcpStops_; tcpStops_.clear();
+    for(const auto &stop : stops) {
+        auto *socket=new QTcpSocket(this);
+        connect(socket,&QTcpSocket::connected,socket,[socket,stop]() { socket->write(stop); socket->disconnectFromHost(); });
+        connect(socket,&QTcpSocket::disconnected,socket,&QObject::deleteLater);
+        QTimer::singleShot(2000,socket,[socket]() { socket->abort(); socket->deleteLater(); });
+        socket->connectToHost(borrowedHost_,borrowedPort_);
+    }
+}
+
+void CameraProfileTestDialog::done(int result)
+{
+    if (ioBusy_) {
+        setStatus(QStringLiteral("Use Stop & Release Camera to cancel the test before closing."));
+        return;
+    }
+    releaseUdp();
+    QDialog::done(result);
 }
 
 void CameraProfileTestDialog::buildUi()
 {
 	auto *root = new QVBoxLayout(this);
 
-	auto *profileBox = new QGroupBox(QStringLiteral("Camera Profile"), this);
-	profileControls_ = profileBox;
-	auto *profileLayout = new QGridLayout(profileBox);
-	profilePath_ = new QLineEdit(profileBox);
-	profilePath_->setReadOnly(true);
-	auto *browse = new QPushButton(QStringLiteral("Open JSON…"), profileBox);
-	auto *reload = new QPushButton(QStringLiteral("Reload"), profileBox);
-	auto *saveAsButton = new QPushButton(QStringLiteral("Save As…"), profileBox);
-	status_ = new QLabel(QStringLiteral("Load a VISCA profile to begin."), profileBox);
-	status_->setWordWrap(true);
-	profileLayout->addWidget(new QLabel(QStringLiteral("File"), profileBox), 0, 0);
-	profileLayout->addWidget(profilePath_, 0, 1);
-	profileLayout->addWidget(browse, 0, 2);
-	profileLayout->addWidget(reload, 0, 3);
-	profileLayout->addWidget(saveAsButton, 0, 4);
-	profileLayout->addWidget(status_, 1, 0, 1, 5);
-	profileLayout->setColumnStretch(1, 1);
-	root->addWidget(profileBox);
+    auto *profileBox=new QGroupBox(QStringLiteral("Camera Profile"),this);
+    profileControls_=profileBox;
+    auto *profileLayout=new QGridLayout(profileBox);
+    profilePath_=new QLineEdit(profileBox); profilePath_->setReadOnly(true);
+    profileName_=new QLineEdit(profileBox); profileName_->setMaxLength(160);
+    profileVersion_=new QLineEdit(profileBox); profileVersion_->setMaxLength(32); profileVersion_->setMaximumWidth(110);
+    profileVersion_->setToolTip(QStringLiteral("Revision of this camera profile, independent of the plugin version and JSON schema."));
+    manufacturer_=new QLineEdit(profileBox); model_=new QLineEdit(profileBox);
+    manufacturer_->setMaxLength(120); model_->setMaxLength(120);
+    connectionVariant_=new QComboBox(profileBox);
+    connectionVariant_->addItem(QStringLiteral("VISCA / TCP — Raw"),QStringLiteral("raw-visca-tcp"));
+    connectionVariant_->addItem(QStringLiteral("VISCA / UDP — Raw"),QStringLiteral("raw-visca-udp"));
+    connectionVariant_->addItem(QStringLiteral("VISCA / UDP — Sony framing"),QStringLiteral("sony-visca-udp"));
+    port_=new QSpinBox(profileBox); port_->setRange(1,65535); port_->setValue(1259);
+    address_=new QSpinBox(profileBox); address_->setRange(1,7); address_->setValue(1);
+    auto *browse=new QPushButton(QStringLiteral("Open JSON…"),profileBox);
+    auto *reload=new QPushButton(QStringLiteral("Reload"),profileBox);
+    auto *saveAsButton=new QPushButton(QStringLiteral("Save As…"),profileBox);
+    auto *newButton=new QPushButton(QStringLiteral("New Profile"),profileBox);
+    connect(newButton,&QPushButton::clicked,this,[this]() { newProfile(); });
+    auto *files=new QWidget(profileBox); auto *fileLayout=new QHBoxLayout(files); fileLayout->setContentsMargins(0,0,0,0);
+    fileLayout->addWidget(profilePath_,1); fileLayout->addWidget(browse); fileLayout->addWidget(reload);
+    fileLayout->addWidget(saveAsButton); fileLayout->addWidget(newButton);
+    profileLayout->addWidget(new QLabel(QStringLiteral("File"),profileBox),0,0);
+    profileLayout->addWidget(files,0,1,1,5);
+    profileLayout->addWidget(new QLabel(QStringLiteral("Profile name"),profileBox),1,0);
+    profileLayout->addWidget(profileName_,1,1,1,3);
+    profileLayout->addWidget(new QLabel(QStringLiteral("Profile version"),profileBox),1,4);
+    profileLayout->addWidget(profileVersion_,1,5);
+    profileLayout->addWidget(new QLabel(QStringLiteral("Manufacturer"),profileBox),2,0);
+    profileLayout->addWidget(manufacturer_,2,1);
+    profileLayout->addWidget(new QLabel(QStringLiteral("Model"),profileBox),2,2);
+    profileLayout->addWidget(model_,2,3,1,3);
+    profileLayout->addWidget(new QLabel(QStringLiteral("Method"),profileBox),3,0);
+    profileLayout->addWidget(connectionVariant_,3,1);
+    profileLayout->addWidget(new QLabel(QStringLiteral("Camera port"),profileBox),3,2);
+    profileLayout->addWidget(port_,3,3);
+    profileLayout->addWidget(new QLabel(QStringLiteral("VISCA address"),profileBox),3,4);
+    profileLayout->addWidget(address_,3,5);
+    udpControls_=new QWidget(profileBox);
+    auto *tuning=new QHBoxLayout(udpControls_); tuning->setContentsMargins(0,0,0,0);
+    auto field=[this,tuning](const QString &label,int low,int high,QWidget **row=nullptr) {
+        auto *container=new QWidget(udpControls_); auto *layout=new QHBoxLayout(container); layout->setContentsMargins(0,0,0,0);
+        auto *spin=new QSpinBox(container); spin->setRange(low,high);
+        layout->addWidget(new QLabel(label,container)); layout->addWidget(spin);
+        tuning->addWidget(container); if(row) *row=container; return spin;
+    };
+    requestGap_=field(QStringLiteral("Gap (ms)"),0,2000);
+    resetDelay_=field(QStringLiteral("After reset (ms)"),0,2000,&resetDelayRow_);
+    replyTimeout_=field(QStringLiteral("Reply timeout (ms)"),50,30000);
+    profileLayout->addWidget(udpControls_,4,0,1,6);
+    localPortRow_=new QWidget(profileBox); auto *receiveLayout=new QHBoxLayout(localPortRow_); receiveLayout->setContentsMargins(0,0,0,0);
+    sameLocalPort_=new QCheckBox(QStringLiteral("Local receive port same as camera port"),localPortRow_);
+    localPort_=new QSpinBox(localPortRow_); localPort_->setRange(1,65535);
+    localPort_->setToolTip(QStringLiteral("UDP port on this computer used to send and receive. This is not the camera's reply source port."));
+    receiveLayout->addWidget(sameLocalPort_); receiveLayout->addWidget(localPort_); receiveLayout->addStretch(1);
+    profileLayout->addWidget(localPortRow_,5,0,1,6);
+    connect(sameLocalPort_,&QCheckBox::toggled,this,[this](bool same) {
+        if(same) localPort_->setValue(port_->value());
+        localPort_->setEnabled(udpMethod() && !same);
+        localPort_->setVisible(udpMethod() && !same);
+    });
+    connect(port_,qOverload<int>(&QSpinBox::valueChanged),this,[this](int value) {
+        if(sameLocalPort_->isChecked()) localPort_->setValue(value);
+    });
+    profileInfo_=new QLabel(profileBox); profileInfo_->setWordWrap(true);
+    profileInfo_->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    profileLayout->addWidget(profileInfo_,6,0,1,6);
+    profileLayout->setColumnStretch(1,2); profileLayout->setColumnStretch(3,1);
+    root->addWidget(profileBox);
 
-	auto *connectionBox = new QGroupBox(QStringLiteral("Test Connection"), this);
-	connectionControls_ = connectionBox;
-	auto *connectionLayout = new QGridLayout(connectionBox);
-	cameraSlot_ = new QComboBox(connectionBox);
-	for (int index = 0; index < CameraSlotCount; ++index)
-		cameraSlot_->addItem(QStringLiteral("Camera %1").arg(index + 1), index);
-	connectionVariant_ = new QComboBox(connectionBox);
-	host_ = new QLineEdit(connectionBox);
-	port_ = new QSpinBox(connectionBox);
-	port_->setRange(1, 65535);
-	port_->setValue(1259);
-	address_ = new QSpinBox(connectionBox);
-	address_->setRange(1, 7);
-	address_->setValue(1);
-	testConnectionButton_ = new QPushButton(QStringLiteral("Test TCP"), connectionBox);
-	auto *applySlot = new QPushButton(QStringLiteral("Apply to Slot"), connectionBox);
-	connectionLayout->addWidget(new QLabel(QStringLiteral("Camera slot"), connectionBox), 0, 0);
-	connectionLayout->addWidget(cameraSlot_, 0, 1);
-	connectionLayout->addWidget(new QLabel(QStringLiteral("Profile transport"), connectionBox), 0, 2);
-	connectionLayout->addWidget(connectionVariant_, 0, 3);
-	connectionLayout->addWidget(new QLabel(QStringLiteral("IP address"), connectionBox), 1, 0);
-	connectionLayout->addWidget(host_, 1, 1);
-	connectionLayout->addWidget(new QLabel(QStringLiteral("Port"), connectionBox), 1, 2);
-	connectionLayout->addWidget(port_, 1, 3);
-	connectionLayout->addWidget(new QLabel(QStringLiteral("VISCA address"), connectionBox), 1, 4);
-	connectionLayout->addWidget(address_, 1, 5);
-	connectionLayout->addWidget(testConnectionButton_, 1, 6);
-	connectionLayout->addWidget(applySlot, 1, 7);
-	connectionLayout->setColumnStretch(1, 1);
-	auto *connectionNote = new QLabel(QStringLiteral("Tests use a separate TCP connection. Avoid moving this camera from another SimpleCam panel or its web page during a test."), connectionBox);
-	connectionNote->setWordWrap(true);
-	connectionLayout->addWidget(connectionNote, 2, 0, 1, 8);
-	root->addWidget(connectionBox);
+    auto *connectionBox=new QGroupBox(QStringLiteral("Test Connection"),this);
+    connectionControls_=connectionBox;
+    auto *connectionLayout=new QGridLayout(connectionBox);
+    host_=new QLineEdit(connectionBox);
+    testConnectionButton_=new QPushButton(QStringLiteral("Test TCP"),connectionBox);
+    releaseButton_=new QPushButton(QStringLiteral("Stop & Release Camera"),connectionBox); releaseButton_->setEnabled(false);
+    connectionLayout->addWidget(new QLabel(QStringLiteral("IP address"),connectionBox),0,0);
+    connectionLayout->addWidget(host_,0,1);
+    connectionLayout->addWidget(testConnectionButton_,0,2);
+    // Busy state disables test inputs individually, keeping emergency release available.
+    connectionLayout->addWidget(releaseButton_,0,3);
+    status_=new QLabel(QStringLiteral("Load a profile and enter a test IP."),connectionBox); status_->setWordWrap(true);
+    connectionLayout->addWidget(status_,1,0,1,4);
+    connectionNote_=new QLabel(QStringLiteral("Test IP is temporary; connection settings come from the profile above."),connectionBox);
+    connectionNote_->setWordWrap(true); connectionLayout->addWidget(connectionNote_,2,0,1,4);
+    connectionLayout->setColumnStretch(1,1);
+    root->addWidget(connectionBox);
+    connect(releaseButton_, &QPushButton::clicked, this, [this]() {
+        testAllActive_ = false;
+        zoomDiscoveryActive_ = false;
+        zoomDiscoveryFinishing_ = false;
+        releaseUdp();
+        completeZoomDiscoveryUi();
+        setCommandInteractionEnabled(true);
+        testAllButton_->setEnabled(profile_ && !profile_->commandIds().isEmpty());
+        setStatus(QStringLiteral("Test canceled/released; active movement was sent best-effort STOP. Normal controls are available; zoom position was not restored."));
+    });
+    connect(connectionVariant_, qOverload<int>(&QComboBox::currentIndexChanged), this, [this]() {
+        if (!ioBusy_) { releaseUdp(); updateConnectionUi(); }
+    });
 
-	connect(cameraSlot_, qOverload<int>(&QComboBox::currentIndexChanged), this,
-		 [this](int index) { selectSlot(index); });
-	connect(testConnectionButton_, &QPushButton::clicked, this, [this]() { testConnection(); });
-	connect(applySlot, &QPushButton::clicked, this, [this]() {
-		CameraRuntime *runtime = cameraRuntime(cameraSlot_->currentData().toInt());
-		if (!runtime) {
-			setStatus(QStringLiteral("Selected camera slot is unavailable."), true);
-			return;
-		}
-		if (QMessageBox::question(this, QStringLiteral("Apply Camera Connection"),
-					  QStringLiteral("Save these connection values to %1's existing slot settings?")
-						  .arg(runtime->cameraName()),
-					  QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel) != QMessageBox::Yes)
-			return;
-		runtime->setHost(host_->text().trimmed());
-		runtime->setPort(static_cast<quint16>(port_->value()));
-		runtime->setCameraAddress(address_->value());
-		setStatus(QStringLiteral("Connection settings applied to %1.").arg(runtime->cameraName()));
-	});
-	selectSlot(0);
+    connect(testConnectionButton_, &QPushButton::clicked, this, [this]() { testConnection(); });
 
 	auto *valueBox = new QGroupBox(QStringLiteral("Token Values for Render / Test"), this);
 	valueControls_ = valueBox;
@@ -348,6 +512,7 @@ void CameraProfileTestDialog::buildUi()
 	auto *traceGroup = new QGroupBox(QStringLiteral("Send / Reply Trace"), outputStack);
 	trace_ = new QPlainTextEdit(traceGroup);
 	trace_->setReadOnly(true);
+	trace_->setMaximumBlockCount(2000);
 	trace_->setLineWrapMode(QPlainTextEdit::WidgetWidth);
 	auto *traceLayout = new QVBoxLayout(traceGroup);
 	traceLayout->addWidget(trace_);
@@ -384,41 +549,45 @@ void CameraProfileTestDialog::loadProfile(const QString &path)
 		setStatus(QStringLiteral("Wait for the current camera operation to finish before loading another profile."), true);
 		return;
 	}
+	releaseUdp();
 	QString error;
 	if (!profile_->load(path, &error)) {
 		setStatus(error, true);
 		return;
 	}
 	profilePath_->setText(path);
-	connectionVariant_->clear();
-	auto *model = new QStandardItemModel(connectionVariant_);
-	for (const QString &id : profile_->connectionIds()) {
-		const QString transport = profile_->connectionTransport(id);
-		const QString framing = profile_->connectionFraming(id);
-		const bool available = transport == QStringLiteral("tcp") && framing == QStringLiteral("raw-visca");
-		auto *item = new QStandardItem(profile_->connectionLabel(id));
-		item->setData(id, Qt::UserRole);
-		if (!available) {
-			item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
-			item->setToolTip(QStringLiteral("This transport is not implemented in the first test-tool pass."));
-		}
-		model->appendRow(item);
-	}
-	auto *udpFuture = new QStandardItem(QStringLiteral("UDP · VISCA over IP (future)"));
-	udpFuture->setFlags(udpFuture->flags() & ~Qt::ItemIsEnabled);
-	udpFuture->setToolTip(QStringLiteral("UDP transport and VISCA-over-IP framing are not implemented yet."));
-	model->appendRow(udpFuture);
-	connectionVariant_->setModel(model);
-	for (int row = 0; row < model->rowCount(); ++row) {
-		const QString id = model->index(row, 0).data(Qt::UserRole).toString();
-		if (!id.isEmpty() && profile_->connectionTransport(id) == QStringLiteral("tcp") &&
-		    profile_->connectionFraming(id) == QStringLiteral("raw-visca")) {
-			connectionVariant_->setCurrentIndex(row);
-			break;
-		}
-	}
+    profileName_->setText(profile_->displayName());
+    profileVersion_->setText(profile_->profileVersion());
+    profileInfo_->setText(QStringLiteral("ID: %1 · %2 · JSON format 1").arg(profile_->id(),profile_->root().value(QStringLiteral("support")).toObject().value(QStringLiteral("status")).toString()));
+    manufacturer_->setText(profile_->root().value(QStringLiteral("identity")).toObject().value(QStringLiteral("manufacturer")).toString());
+    model_->setText(profile_->root().value(QStringLiteral("identity")).toObject().value(QStringLiteral("model")).toString());
+    const auto c=profile_->networkConnection();
+    const auto udp=c.value(QStringLiteral("udp")).toObject();
+    const auto tuning=c.value(QStringLiteral("tuning")).toObject();
+    connectionVariant_->blockSignals(true);
+    connectionVariant_->setCurrentIndex(connectionVariant_->findData(profile_->networkMethod()));
+    connectionVariant_->blockSignals(false);
+    port_->setValue(c.value(QStringLiteral("defaultPort")).toInt(1259));
+    sameLocalPort_->blockSignals(true);
+    sameLocalPort_->setChecked(udp.value(QStringLiteral("localPortMode")).toString()==QStringLiteral("same-as-camera") ||
+        (!udp.contains(QStringLiteral("localPortMode")) && udp.value(QStringLiteral("localPort")).toInt()==port_->value()));
+    sameLocalPort_->blockSignals(false);
+    localPort_->setValue(sameLocalPort_->isChecked() ? port_->value() : udp.value(QStringLiteral("localPort")).toInt(52381));
+    requestGap_->setValue(tuning.value(QStringLiteral("minimumRequestGapMs")).toInt(udp.value(QStringLiteral("minimumRequestGapMs")).toInt(0)));
+    resetDelay_->setValue(udp.value(QStringLiteral("resetSetupMs")).toInt(100));
+    replyTimeout_->setValue(c.value(QStringLiteral("response")).toObject().value(QStringLiteral("timeoutMs")).toInt(3000));
+    address_->setValue(c.value(QStringLiteral("addressing")).toObject().value(QStringLiteral("default")).toInt(1));
+    const auto limits=profile_->root().value(QStringLiteral("capabilities")).toObject().value(QStringLiteral("limits")).toObject();
+    auto range=[&](QSpinBox *spin,const char *name,int low,int high) {
+        const auto r=limits.value(QString::fromLatin1(name)).toObject();
+        spin->setRange(r.value(QStringLiteral("minimum")).toInt(low),r.value(QStringLiteral("maximum")).toInt(high));
+    };
+    range(panSpeed_,"panSpeed",1,24); range(tiltSpeed_,"tiltSpeed",1,20);
+    range(zoomSpeed_,"zoomSpeed",0,15); range(zoomPosition_,"zoomAbsolute",0,65535);
+    presetNumber_->setRange(1,profile_->presetCapacity());
 	populateCommands();
-	setStatus(QStringLiteral("Loaded %1 (%2). Basic profile structure is valid for this test harness.")
+    updateConnectionUi();
+	setStatus(QStringLiteral("Loaded %1 (%2). Ready for rendering and tests.")
 			  .arg(profile_->displayName(), profile_->id()));
 }
 
@@ -473,17 +642,6 @@ void CameraProfileTestDialog::populateCommands()
 	}
 	if (!ids.isEmpty())
 		commands_->setCurrentCell(0, 0);
-}
-
-void CameraProfileTestDialog::selectSlot(int index)
-{
-	Q_UNUSED(index);
-	CameraRuntime *runtime = cameraRuntime(cameraSlot_->currentData().toInt());
-	if (!runtime)
-		return;
-	host_->setText(runtime->host());
-	port_->setValue(runtime->port() ? runtime->port() : 1259);
-	address_->setValue(runtime->cameraAddress());
 }
 
 void CameraProfileTestDialog::setStatus(const QString &message, bool error)
@@ -554,10 +712,8 @@ void CameraProfileTestDialog::sendCurrentCommand()
 		setStatus(QStringLiteral("Load a profile first."), true);
 		return;
 	}
-	const QString variant = connectionVariant_->currentData(Qt::UserRole).toString();
-	if (profile_->connectionTransport(variant) != QStringLiteral("tcp") ||
-	    profile_->connectionFraming(variant) != QStringLiteral("raw-visca")) {
-		setStatus(QStringLiteral("Only raw VISCA over TCP is implemented in this test-tool pass."), true);
+	if (!supportedTransport()) {
+		setStatus(QStringLiteral("This profile transport is not supported."), true);
 		return;
 	}
 	const QStringList templates = selectedTemplates();
@@ -583,7 +739,7 @@ void CameraProfileTestDialog::sendCurrentCommand()
 					 QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel) != QMessageBox::Yes)
 			return;
 	}
-	applyEditsToProfile();
+	if (!applyEditsToProfile()) return;
 	const bool requiresAwakeCamera = id != QStringLiteral("powerOn") && id != QStringLiteral("powerInquiry");
 	setCommandResult(id, QStringLiteral("RUN"), requiresAwakeCamera ? QStringLiteral("Checking camera power state")
 										 : QStringLiteral("Sending command"));
@@ -595,7 +751,7 @@ void CameraProfileTestDialog::sendCurrentCommand()
 	trace_->appendPlainText(QStringLiteral("%1 · %2 · %3 packet(s)")
 				 .arg(QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss.zzz")),
 			      profile_->id(), id));
-	ioBusy_ = true;
+	setTestBusy(true);
 	commands_->setEnabled(false);
 	testConnectionButton_->setEnabled(false);
 	QPointer<CameraProfileTestDialog> self(this);
@@ -643,7 +799,7 @@ void CameraProfileTestDialog::sendCurrentCommand()
 						      .arg(QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss.zzz")), id, resultMessage));
 			self->setStatus(resultMessage, true);
 		}
-		self->ioBusy_ = false;
+		self->setTestBusy(false);
 		self->commands_->setEnabled(true);
 		self->testConnectionButton_->setEnabled(true);
 	};
@@ -651,7 +807,8 @@ void CameraProfileTestDialog::sendCurrentCommand()
 		if (self)
 			self->runPacketSequence(packets, id, finishRequested);
 	};
-	if (!requiresAwakeCamera) {
+    const bool stop = id == QStringLiteral("zoomStop") || id == QStringLiteral("focusStop") || id == QStringLiteral("stopPanTilt");
+	if (!requiresAwakeCamera || (supportedTransport() && stop)) {
 		sendRequested();
 	} else {
 		queryCameraPower([self, id, sendRequested, finishRequested](bool ok, bool cameraOn, const QString &error) {
@@ -673,22 +830,8 @@ void CameraProfileTestDialog::sendCurrentCommand()
 				finishRequested(true, {}, QStringLiteral("Camera is already Off / Standby; no packet sent."));
 				return;
 			}
-			self->trace_->appendPlainText(QStringLiteral("%1 · camera reports Off / Standby; sending Power On before %2")
-						      .arg(QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss.zzz")), prettyName(id)));
-			self->wakeCamera([self, id, sendRequested, finishRequested](bool woke, const QString &wakeError) {
-				if (!self)
-					return;
-				if (!woke) {
-					self->cameraInStandby_ = true;
-					finishRequested(false, {}, QStringLiteral("Automatic Power On was not verified; %1 was not sent. %2")
-								  .arg(prettyName(id), wakeError));
-					return;
-				}
-				self->cameraInStandby_ = false;
-				self->trace_->appendPlainText(QStringLiteral("%1 · camera power inquiry confirms On; sending %2")
-							      .arg(QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss.zzz")), prettyName(id)));
-				sendRequested();
-			});
+            finishRequested(false, {}, QStringLiteral("Camera reports STANDBY; use Power On explicitly before this test."));
+
 		});
 	}
 }
@@ -703,10 +846,8 @@ void CameraProfileTestDialog::startTestAll()
 		setStatus(QStringLiteral("Load a profile with commands first."), true);
 		return;
 	}
-	const QString variant = connectionVariant_->currentData(Qt::UserRole).toString();
-	if (profile_->connectionTransport(variant) != QStringLiteral("tcp") ||
-	    profile_->connectionFraming(variant) != QStringLiteral("raw-visca")) {
-		setStatus(QStringLiteral("Test All currently supports raw VISCA over TCP only."), true);
+	if (!supportedTransport()) {
+		setStatus(QStringLiteral("This profile transport is not supported."), true);
 		return;
 	}
 	const QString host = host_->text().trimmed();
@@ -732,10 +873,12 @@ void CameraProfileTestDialog::startTestAll()
 				 QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel) != QMessageBox::Yes)
 		return;
 
+	if (!applyEditsToProfile()) return;
 	testAllActive_ = true;
-	ioBusy_ = true;
+	setTestBusy(true);
 	profileControls_->setEnabled(false);
-	connectionControls_->setEnabled(false);
+	host_->setEnabled(false);
+	testConnectionButton_->setEnabled(false);
 	valueControls_->setEnabled(false);
 	tokenControls_->setEnabled(false);
 	setCommandInteractionEnabled(false);
@@ -818,9 +961,10 @@ void CameraProfileTestDialog::finishTestAll()
 	if (!testAllActive_)
 		return;
 	testAllActive_ = false;
-	ioBusy_ = false;
+	setTestBusy(false);
 	profileControls_->setEnabled(true);
-	connectionControls_->setEnabled(true);
+	host_->setEnabled(true);
+	testConnectionButton_->setEnabled(true);
 	valueControls_->setEnabled(true);
 	tokenControls_->setEnabled(true);
 	setCommandInteractionEnabled(true);
@@ -897,17 +1041,27 @@ void CameraProfileTestDialog::testConnection()
 	}
 	const QString host = host_->text().trimmed();
 	const quint16 port = static_cast<quint16>(port_->value());
+    if (udpMethod()) {
+        if (!applyEditsToProfile()) return;
+        setTestBusy(true);
+        queryCameraPower([this](bool ok, bool on, const QString &message) {
+            setTestBusy(false);
+            setStatus(ok ? (on ? QStringLiteral("UDP: camera reports ON.") : QStringLiteral("UDP: camera reports STANDBY.")) : message, !ok);
+        });
+        return;
+    }
 	if (host.isEmpty()) {
 		setStatus(QStringLiteral("Enter an IP address first."), true);
 		return;
 	}
-	const QString variant = connectionVariant_->currentData(Qt::UserRole).toString();
-	if (profile_->connectionTransport(variant) != QStringLiteral("tcp") ||
-	    profile_->connectionFraming(variant) != QStringLiteral("raw-visca")) {
-		setStatus(QStringLiteral("This profile transport is not available in the first pass."), true);
+	if (!supportedTransport()) {
+		setStatus(QStringLiteral("This profile transport is not supported."), true);
 		return;
 	}
-	auto *socket = new QTcpSocket(this);
+    QString sessionError;
+    if (!prepareUdp(&sessionError)) { setStatus(sessionError,true); return; }
+    auto *socket = new QTcpSocket(this);
+    tcpSockets_.append(socket);
 	auto *timer = new QTimer(socket);
 	timer->setSingleShot(true);
 	auto done = std::make_shared<bool>(false);
@@ -921,7 +1075,7 @@ void CameraProfileTestDialog::testConnection()
 		trace_->appendPlainText(QStringLiteral("%1 · connection: %2")
 					.arg(QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss.zzz")), message));
 		setStatus(message, !ok);
-		ioBusy_ = false;
+		setTestBusy(false);
 		commands_->setEnabled(true);
 		testConnectionButton_->setEnabled(true);
 	};
@@ -934,8 +1088,8 @@ void CameraProfileTestDialog::testConnection()
 	connect(socket, &QTcpSocket::errorOccurred, socket, [finish, socket](QAbstractSocket::SocketError) mutable {
 		finish(false, QStringLiteral("TCP connection failed: %1").arg(socket->errorString()));
 	});
-	timer->start(3000);
-	ioBusy_ = true;
+	timer->start(replyTimeout_->value());
+	setTestBusy(true);
 	commands_->setEnabled(false);
 	testConnectionButton_->setEnabled(false);
 	socket->connectToHost(host, port);
@@ -955,10 +1109,11 @@ void CameraProfileTestDialog::insertToken(const QString &token)
 	activeEditor_->setFocus();
 }
 
-void CameraProfileTestDialog::applyEditsToProfile()
+bool CameraProfileTestDialog::applyEditsToProfile()
 {
-	if (!profile_)
-		return;
+	if (!profile_) return false;
+    CameraProfileDocument candidate = *profile_;
+    QString error;
 	for (int row = 0; row < commands_->rowCount(); ++row) {
 		const QString id = commands_->item(row, 0)->data(Qt::UserRole).toString();
 		QWidget *editorWidget = commands_->cellWidget(row, 1);
@@ -967,15 +1122,47 @@ void CameraProfileTestDialog::applyEditsToProfile()
 		QStringList lines;
 		if (auto *lineEditor = qobject_cast<QLineEdit *>(editorWidget))
 			lines = splitTemplateLine(lineEditor->text());
-		profile_->setCommandTemplates(id, lines);
-	}
+        QVector<QByteArray> rendered;
+        if (!renderViscaTemplates(lines, templateValues(), &rendered, &error)) {
+            setStatus(QStringLiteral("%1: %2").arg(id, error), true); return false;
+        }
+        if (sonyUdp()) for (const auto &packet : rendered) {
+            if (packet.size() < 3 || packet.size() > 16 || static_cast<unsigned char>(packet[0]) != 0x81 ||
+                (static_cast<unsigned char>(packet[1]) != 1 && static_cast<unsigned char>(packet[1]) != 9)) {
+                setStatus(QStringLiteral("%1: Sony UDP needs a 3–16 byte VISCA command/inquiry addressed to 81.").arg(id), true);
+                return false;
+            }
+        }
+        if (!candidate.setCommandTemplates(id, lines, &error)) {
+            setStatus(error, true); return false;
+        }
+    }
+    if (!candidate.setProfilerSettings(profileName_->text(),connectionVariant_->currentData().toString(),
+            port_->value(),localPort_->value(),requestGap_->value(),resetDelay_->value(),replyTimeout_->value(),address_->value(),&error)) {
+        setStatus(error, true); return false;
+    }
+    if(manufacturer_->text().trimmed().isEmpty() || model_->text().trimmed().isEmpty()) {
+        setStatus(QStringLiteral("Enter manufacturer and model for this profile."),true); return false;
+    }
+    auto root=candidate.root(); auto identity=root.value(QStringLiteral("identity")).toObject();
+    identity.insert(QStringLiteral("manufacturer"),manufacturer_->text().trimmed());
+    identity.insert(QStringLiteral("model"),model_->text().trimmed()); root.insert(QStringLiteral("identity"),identity);
+    // Validate metadata without losing document path or the explicit display-name intent.
+    CameraProfileDocument metadataCheck;
+    if(!metadataCheck.loadBytes(QJsonDocument(root).toJson(),&error)) { setStatus(error,true); return false; }
+    if(!candidate.setIdentity(manufacturer_->text().trimmed(),model_->text().trimmed(),&error)) { setStatus(error,true); return false; }
+    if(!candidate.setProfileVersion(profileVersion_->text(),&error) || !candidate.setLocalPortPolicy(sameLocalPort_->isChecked(),&error)) {
+        setStatus(error,true); return false;
+    }
+    *profile_ = candidate;
+    return true;
 }
 
 void CameraProfileTestDialog::saveAs()
 {
 	if (!profile_)
 		return;
-	applyEditsToProfile();
+	if (!applyEditsToProfile()) return;
 	const QString directory = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) +
 				  QStringLiteral("/simplecamdirect/profiles");
 	const QString defaultName = profile_->id().section(QLatin1Char('.'), -1) + QStringLiteral(".camera.cfg");
@@ -984,7 +1171,18 @@ void CameraProfileTestDialog::saveAs()
 							 QStringLiteral("Camera profiles (*.camera.cfg *.json)"));
 	if (path.isEmpty())
 		return;
-	if (QFileInfo(path).canonicalFilePath() == QFileInfo(profile_->path()).canonicalFilePath()) {
+    const QFileInfo destination(path), source(profile_->path());
+    const QString builtInDir=QFileInfo(defaultProfilePath_).absoluteDir().canonicalPath();
+    const QString targetDir=destination.absoluteDir().canonicalPath();
+    const bool insideBuiltIn=!builtInDir.isEmpty() && !targetDir.isEmpty() &&
+        (targetDir==builtInDir || targetDir.startsWith(builtInDir+QLatin1Char('/')));
+    if (insideBuiltIn) {
+        setStatus(QStringLiteral("Built-in profiles are read-only. Save the custom profile in the user profile folder or another directory."),true);
+        return;
+    }
+    if (!profile_->path().isEmpty() &&
+        (destination.absoluteFilePath()==source.absoluteFilePath() ||
+         (!destination.canonicalFilePath().isEmpty() && destination.canonicalFilePath()==source.canonicalFilePath()))) {
 		setStatus(QStringLiteral("Save As needs a new file path so the source profile stays unchanged."), true);
 		return;
 	}
@@ -995,6 +1193,7 @@ void CameraProfileTestDialog::saveAs()
 		return;
 	}
 	profilePath_->setText(path);
+    profileInfo_->setText(QStringLiteral("ID: %1 · draft · JSON format 1").arg(profile_->id()));
 	setStatus(QStringLiteral("Saved edited profile copy: %1").arg(path));
 }
 
@@ -1072,76 +1271,68 @@ void CameraProfileTestDialog::queryCameraPower(std::function<void(bool, bool, co
 		      }, 1200);
 }
 
-void CameraProfileTestDialog::waitForCameraOn(int attemptsRemaining,
-						      std::function<void(bool, const QString &)> completion)
-{
-	queryCameraPower([this, attemptsRemaining, completion](bool ok, bool cameraOn, const QString &message) {
-		if (ok && cameraOn) {
-			completion(true, {});
-			return;
-		}
-		if (attemptsRemaining <= 1) {
-			const QString reason = ok ? QStringLiteral("Camera continued to report Off / Standby.") : message;
-			completion(false, QStringLiteral("Power inquiry did not verify On after repeated checks. %1").arg(reason));
-			return;
-		}
-		QTimer::singleShot(500, this, [this, attemptsRemaining, completion]() {
-			waitForCameraOn(attemptsRemaining - 1, completion);
-		});
-	});
-}
-
-void CameraProfileTestDialog::wakeCamera(std::function<void(bool, const QString &)> completion)
-{
-	if (!profile_) {
-		completion(false, QStringLiteral("No camera profile is loaded."));
-		return;
-	}
-	const CameraProfileCommand binding = profile_->command(QStringLiteral("powerOn"));
-	QVector<QByteArray> packets;
-	QString error;
-	if (binding.templates.isEmpty() || !renderViscaTemplates(binding.templates, templateValues(), &packets, &error) ||
-	    packets.size() != 1) {
-		completion(false, error.isEmpty() ? QStringLiteral("Profile has no valid one-packet Power On command.") : error);
-		return;
-	}
-	sendOnePacket(packets.first(), false, false,
-		      [this, completion](bool ok, const QByteArray &reply, const QString &message) {
-			      if (!ok) {
-				      completion(false, QStringLiteral("Power On was not acknowledged: %1").arg(message));
-				      return;
-			      }
-			      trace_->appendPlainText(QStringLiteral("%1 · Power On response: %2; polling power inquiry")
-						      .arg(QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss.zzz")), hexString(reply)));
-			      QTimer::singleShot(400, this, [this, completion]() { waitForCameraOn(12, completion); });
-		      }, 3000);
-}
-
 void CameraProfileTestDialog::sendOnePacket(
 	const QByteArray &packet, bool waitForCompletion, bool inquiry,
 	std::function<void(bool, const QByteArray &, const QString &)> completion, int timeoutMs)
 {
+    Q_UNUSED(timeoutMs);
+    QString error;
+    if (!prepareUdp(&error)) { completion(false, {}, error); return; }
+    if (udpMethod()) {
+        auto reply = std::make_shared<QByteArray>();
+        ViscaTcpTransport::FrameCommand command;
+        command.bytes = packet;
+        command.waitForCompletion = waitForCompletion;
+        command.completionTimeoutMs = 0; // Profile timeout applies equally to inquiry, ACK and completion.
+        command.onReply = [reply](const QByteArray &frame) { reply->append(frame); };
+        const bool stop = isViscaStop(packet);
+        udp_->enqueue({command}, [this, reply, completion](bool ok, const QString &message) {
+            trace_->appendPlainText(QStringLiteral("UDP result: %1 · %2").arg(ok ? QStringLiteral("PASS") : QStringLiteral("FAIL"), message));
+            completion(ok, *reply, message);
+        }, 0, stop);
+        return;
+    }
+    const auto generation=sessionGeneration_;
+    const int remaining=!isViscaStop(packet) && lastTcpReply_.isValid() ? std::max(0,requestGap_->value()-int(lastTcpReply_.elapsed())) : 0;
+    QTimer::singleShot(remaining,Qt::PreciseTimer,this,[this,generation,packet,waitForCompletion,inquiry,completion]() {
+        if(generation==sessionGeneration_) sendTcpPacket(packet,waitForCompletion,inquiry,completion,replyTimeout_->value());
+    });
+}
+void CameraProfileTestDialog::sendTcpPacket(const QByteArray &packet, bool waitForCompletion, bool inquiry,
+    std::function<void(bool,const QByteArray &,const QString &)> completion,int timeoutMs)
+{
 	const QString host = host_->text().trimmed();
 	const quint16 port = static_cast<quint16>(port_->value());
-	auto *socket = new QTcpSocket(this);
+    auto *socket = new QTcpSocket(this);
+    tcpSockets_.append(socket);
 	auto *timer = new QTimer(socket);
 	timer->setSingleShot(true);
 	auto finished = std::make_shared<bool>(false);
 	auto input = std::make_shared<QByteArray>();
 	auto replies = std::make_shared<QByteArray>();
-	auto finish = [socket, timer, finished, replies, completion](bool ok, const QString &error) mutable {
+	auto finish = [this, socket, timer, finished, replies, completion](bool ok, const QString &error) mutable {
 		if (*finished)
 			return;
 		*finished = true;
 		timer->stop();
 		socket->abort();
 		socket->deleteLater();
+		lastTcpReply_.start();
+        if (!ok) stopTcpMovement();
 		completion(ok, *replies, error);
 	};
 	connect(timer, &QTimer::timeout, socket, [finish]() mutable {
 		finish(false, QStringLiteral("Timed out waiting for VISCA reply"));
 	});
-	connect(socket, &QTcpSocket::connected, socket, [socket, packet, timer, timeoutMs]() {
+	connect(socket, &QTcpSocket::connected, socket, [this, socket, packet, timer, timeoutMs]() {
+        QByteArray stop;
+        if(packet.size()==6 && packet.mid(1,3)==QByteArray::fromHex("010407")) stop=packet.left(4)+QByteArray::fromHex("00ff");
+        if(packet.size()==6 && packet.mid(1,3)==QByteArray::fromHex("010408")) stop=packet.left(4)+QByteArray::fromHex("00ff");
+        if(packet.size()==9 && packet.mid(1,3)==QByteArray::fromHex("010601")) stop=packet.left(4)+QByteArray::fromHex("01010303ff");
+        if(!stop.isEmpty()) {
+            if(packet==stop || (packet.size()==9 && packet.mid(6,2)==QByteArray::fromHex("0303"))) tcpStops_.removeAll(stop);
+            else if(!tcpStops_.contains(stop)) tcpStops_.append(stop);
+        }
 		const qint64 written = socket->write(packet);
 		if (written != packet.size()) {
 			socket->abort();
@@ -1153,6 +1344,7 @@ void CameraProfileTestDialog::sendOnePacket(
 	connect(socket, &QTcpSocket::readyRead, socket,
 		 [socket, input, replies, inquiry, waitForCompletion, finish, this]() mutable {
 			input->append(socket->readAll());
+            if(input->size()>16384) { finish(false,QStringLiteral("VISCA TCP reply exceeded the buffer limit")); return; }
 			while (true) {
 				const qsizetype end = input->indexOf(static_cast<char>(0xFF));
 				if (end < 0)
@@ -1162,7 +1354,7 @@ void CameraProfileTestDialog::sendOnePacket(
 				replies->append(frame);
 				trace_->appendPlainText(QStringLiteral("%1 · RX: %2")
 							.arg(QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss.zzz")), hexString(frame)));
-				if (frame.size() < 3)
+				if (frame.size() < 3 || static_cast<unsigned char>(frame[0]) != unsigned((address_->value()+8)<<4))
 					continue;
 				const quint8 kind = static_cast<quint8>(frame.at(1)) & 0xF0;
 				if (kind == 0x60) {
@@ -1248,8 +1440,9 @@ void CameraProfileTestDialog::startZoomDiscovery()
 				 QStringLiteral("The camera will move toward telephoto, be queried until its position stops increasing, then return to its starting position when absolute zoom is available. Continue?"),
 				 QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel) != QMessageBox::Yes)
 		return;
+	if (!applyEditsToProfile()) return;
 	zoomDiscoveryActive_ = true;
-	ioBusy_ = true;
+	setTestBusy(true);
 	zoomDiscoveryCancelRequested_ = false;
 	zoomDiscoveryFinishing_ = false;
 	zoomDiscoveryStable_ = 0;
@@ -1268,7 +1461,6 @@ void CameraProfileTestDialog::startZoomDiscovery()
 	zoomPosition_->setEnabled(false);
 	presetNumber_->setEnabled(false);
 	digitalZoomMode_->setEnabled(false);
-	cameraSlot_->setEnabled(false);
 	connectionVariant_->setEnabled(false);
 	host_->setEnabled(false);
 	port_->setEnabled(false);
@@ -1469,12 +1661,11 @@ void CameraProfileTestDialog::completeZoomDiscoveryUi()
 	zoomPosition_->setEnabled(true);
 	presetNumber_->setEnabled(true);
 	digitalZoomMode_->setEnabled(true);
-	cameraSlot_->setEnabled(true);
 	connectionVariant_->setEnabled(true);
 	host_->setEnabled(true);
 	port_->setEnabled(true);
 	address_->setEnabled(true);
-	ioBusy_ = false;
+	setTestBusy(false);
 }
 
 } // namespace simplecam

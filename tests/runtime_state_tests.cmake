@@ -2,6 +2,7 @@
 add_executable(simplecamptz_runtime_state_tests EXCLUDE_FROM_ALL
   tests/camera_runtime_state_test.cpp
   src/camera_runtime.cpp
+  src/visca_udp_transport.cpp
   src/camera_profile.cpp
 )
 target_include_directories(simplecamptz_runtime_state_tests PRIVATE src)
@@ -16,6 +17,7 @@ add_test(NAME simplecamptz_runtime_state_tests
 add_executable(simplecamptz_camera_concurrency_tests EXCLUDE_FROM_ALL
   tests/camera_concurrency_test.cpp
   src/camera_runtime.cpp
+  src/visca_udp_transport.cpp
   src/camera_profile.cpp
 )
 target_include_directories(simplecamptz_camera_concurrency_tests PRIVATE src)
@@ -25,3 +27,4 @@ target_link_libraries(simplecamptz_camera_concurrency_tests PRIVATE
   Qt6::Core Qt6::Network OBS::libobs plugin-support)
 add_test(NAME simplecamptz_camera_concurrency_tests
   COMMAND simplecamptz_camera_concurrency_tests "${CMAKE_CURRENT_SOURCE_DIR}/data/cameras/avipas-av-1280w.visca.json")
+

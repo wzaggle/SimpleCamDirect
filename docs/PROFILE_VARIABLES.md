@@ -144,3 +144,4 @@ The ONVIF PTZ specification states that AbsoluteMove's position is an absolute t
 - Test 16-bit zoom nibble order across boundary values and each model's declared native maximum.
 - Test that per-source transition speed is passed only to profiles declaring it.
 - For future ONVIF, test advertised space discovery, zoom-only requests omitting PanTilt, position/speed separation, XML serialization, selected profile token, and SOAP faults using protocol fixtures.
+

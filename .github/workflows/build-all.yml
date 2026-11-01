@@ -12,6 +12,7 @@ on:
         options:
           - all
           - macos
+          - macos-intel
           - windows
           - linux
       source_revision:
@@ -138,7 +139,7 @@ jobs:
           retention-days: 7
 
   collect:
-    name: Collect Windows, macOS, Linux installers
+    name: Collect all four native installers
     needs: [prepare, native]
     if: needs.prepare.outputs.platform == 'all'
     runs-on: ubuntu-24.04
@@ -157,11 +158,11 @@ jobs:
           import json, os
           from pathlib import Path
           root = Path('installers')
-          for platform in ('Windows', 'macOS', 'Linux'):
+          for platform in ('Windows', 'macOS-AppleSilicon', 'macOS-Intel', 'Linux'):
               info = json.loads((root / platform / 'BUILD-INFO.json').read_text())
               assert info['revision'] == os.environ['EXPECTED_REVISION'], platform
               assert info['automated_tests'] == 'passed', platform
-          (root / 'README.txt').write_text('SimpleCamPTZ Windows, Apple Silicon macOS, and Ubuntu 24.04 packages.\n'
+          (root / 'README.txt').write_text('SimpleCamPTZ Windows, Intel macOS, Apple Silicon macOS, and Ubuntu 24.04 packages.\n'
               'Each folder contains installation instructions, checksums and source revision.\n'
               'CI compilation/tests do not establish OBS runtime or physical camera compatibility.\n')
           PY

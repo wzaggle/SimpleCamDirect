@@ -8,6 +8,7 @@
   "required": ["schemaVersion", "identity", "support", "capabilities", "connections", "commands"],
   "properties": {
     "schemaVersion": {"const": 1},
+    "profileVersion": {"type": "string", "minLength": 1, "maxLength": 32, "pattern": "^[0-9]+(?:\\.[0-9]+){0,2}(?:-[A-Za-z0-9.-]+)?$"},
     "derivedFrom": {"type": "string", "maxLength": 96, "description": "Source profile id for a user-created profile copy."},
     "identity": {
       "type": "object",
@@ -135,6 +136,22 @@
           "protocol": {"enum": ["visca", "pelco-d", "pelco-p", "onvif-ptz", "ndi-ptz", "dvip", "manufacturer-api"]},
           "transport": {"enum": ["serial-rs232", "serial-rs422", "serial-rs485", "tcp", "udp", "onvif-http", "ndi-sdk"]},
           "framing": {"enum": ["raw-visca", "visca-ip-header", "pelco-frame", "onvif-ptz-service", "ndi-ptz-api", "dvip-frame", "manufacturer-defined"]},
+          "driver": {"enum": ["sony-visca-udp", "raw-visca-tcp", "raw-visca-udp"], "description": "Explicit implemented network send method."},
+          "tuning": {
+            "type": "object", "additionalProperties": false,
+            "required": ["minimumRequestGapMs"],
+            "properties": {"minimumRequestGapMs": {"type": "integer", "minimum": 0, "maximum": 2000}}
+          },
+          "udp": {
+            "type": "object", "additionalProperties": false,
+            "required": ["localPort", "minimumRequestGapMs"],
+            "properties": {
+              "localPort": {"type": "integer", "minimum": 1, "maximum": 65535},
+              "localPortMode": {"enum": ["same-as-camera", "fixed"]},
+              "minimumRequestGapMs": {"type": "integer", "minimum": 0, "maximum": 2000},
+              "resetSetupMs": {"type": "integer", "minimum": 0, "maximum": 2000}
+            }
+          },
           "defaultPort": {"type": "integer", "minimum": 1, "maximum": 65535},
           "portRequired": {"type": "boolean"},
           "addressing": {
@@ -292,3 +309,4 @@
     }
   }
 }
+

@@ -1,0 +1,5 @@
+SimpleCamPTZ v0.2.0 — complete source project
+
+Four native installer targets: Windows x64, Intel Mac x86_64, Apple Silicon
+arm64 and Ubuntu 24.04 amd64. See docs/RELEASE_020.md and docs/CLOUD_BUILDS.md.
+Local Windows builds use RelWithDebInfo with OBS closed.

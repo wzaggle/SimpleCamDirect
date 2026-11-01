@@ -3,6 +3,7 @@
 #include "camera_profile.hpp"
 
 #include <QDialog>
+#include <QElapsedTimer>
 
 #include <QByteArray>
 #include <QPointer>
@@ -12,6 +13,7 @@
 #include <functional>
 
 class QComboBox;
+class QCheckBox;
 class QCloseEvent;
 class QEvent;
 class QLabel;
@@ -20,11 +22,14 @@ class QPlainTextEdit;
 class QPushButton;
 class QSpinBox;
 class QTableWidget;
+class QTcpSocket;
 class QWidget;
 
 namespace simplecam {
 
 class CameraProfileDocument;
+class CameraRuntime;
+class ViscaUdpTransport;
 
 class CameraProfileTestDialog final : public QDialog {
 public:
@@ -34,12 +39,23 @@ public:
 protected:
 	bool eventFilter(QObject *watched, QEvent *event) override;
 	void closeEvent(QCloseEvent *event) override;
+    void done(int result) override;
 
 private:
+    friend class ProfileToolTest;
+    bool sonyUdp() const;
+    bool udpMethod() const;
+    void newProfile();
+    void stopTcpMovement();
+    bool supportedTransport() const;
+    void updateConnectionUi();
+    bool prepareUdp(QString *error);
+    void releaseUdp();
+    void setTestBusy(bool busy);
 	void buildUi();
 	void loadProfile(const QString &path);
 	void populateCommands();
-	void selectSlot(int index);
+
 	void setStatus(const QString &message, bool error = false);
 	ViscaTemplateValues templateValues() const;
 	QStringList selectedTemplates() const;
@@ -53,24 +69,47 @@ private:
 	void setCommandInteractionEnabled(bool enabled);
 	void testConnection();
 	void insertToken(const QString &token);
-	void applyEditsToProfile();
+	bool applyEditsToProfile();
 	void saveAs();
 	void runPacketSequence(const QVector<QByteArray> &packets, const QString &commandId,
 			       std::function<void(bool, const QVector<QByteArray> &, const QString &)> completion);
 	void sendOnePacket(const QByteArray &packet, bool waitForCompletion, bool inquiry,
 			   std::function<void(bool, const QByteArray &, const QString &)> completion, int timeoutMs = 5000);
+    void sendTcpPacket(const QByteArray &packet, bool waitForCompletion, bool inquiry,
+        std::function<void(bool, const QByteArray &, const QString &)> completion, int timeoutMs);
 	void queryCameraPower(std::function<void(bool, bool, const QString &)> completion);
-	void waitForCameraOn(int attemptsRemaining, std::function<void(bool, const QString &)> completion);
-	void wakeCamera(std::function<void(bool, const QString &)> completion);
 	void startZoomDiscovery();
 	void pollZoomDiscovery();
 	void queryZoom(std::function<void(bool, int, const QString &)> completion);
 	void finishZoomDiscovery(bool cancelled = false, bool timedOut = false, bool noProgress = false);
 	void completeZoomDiscoveryUi();
 
+    ViscaUdpTransport *udp_ = nullptr;
+    QVector<QPointer<CameraRuntime>> borrowed_;
+    QString borrowedHost_;
+    quint16 borrowedPort_ = 0;
+    QWidget *udpControls_ = nullptr;
+    QSpinBox *localPort_ = nullptr;
+    QSpinBox *requestGap_ = nullptr;
+    QSpinBox *resetDelay_ = nullptr;
+    QSpinBox *replyTimeout_ = nullptr;
+    QLabel *connectionNote_ = nullptr;
+    QPushButton *releaseButton_ = nullptr;
+    bool sessionActive_ = false;
+    quint64 sessionGeneration_ = 0;
+    QVector<QPointer<QTcpSocket>> tcpSockets_;
+    QVector<QByteArray> tcpStops_;
+    QElapsedTimer lastTcpReply_;
 	QString defaultProfilePath_;
 	CameraProfileDocument *profile_ = nullptr;
-	QComboBox *cameraSlot_ = nullptr;
+    QLineEdit *profileName_ = nullptr;
+    QLineEdit *profileVersion_ = nullptr;
+    QLabel *profileInfo_ = nullptr;
+    QCheckBox *sameLocalPort_ = nullptr;
+    QWidget *localPortRow_ = nullptr;
+    QWidget *resetDelayRow_ = nullptr;
+    QLineEdit *manufacturer_ = nullptr;
+    QLineEdit *model_ = nullptr;
 	QComboBox *connectionVariant_ = nullptr;
 	QComboBox *digitalZoomMode_ = nullptr;
 	QLineEdit *profilePath_ = nullptr;

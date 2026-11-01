@@ -1,3 +1,9 @@
+# v0.2.0 current packaging
+
+See RELEASE_020.md. All now selects FOUR jobs, including macos-intel.
+The combined artifact folders are Windows, macOS-AppleSilicon, macOS-Intel,
+and Linux. Earlier three-platform descriptions below are historical.
+
 # One source revision, three native builds
 
 ## Current setup

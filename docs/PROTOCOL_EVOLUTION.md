@@ -75,3 +75,4 @@ Before merging a new adapter, verify:
 7. Platform packaging and runtime dependencies are tested for every supported build target.
 
 Record each phase's support as `draft`, `protocol-reviewed`, or `hardware-tested` per profile and connection variant. A protocol adapter passing unit tests does not mark an individual camera profile hardware-tested.
+

@@ -71,3 +71,4 @@ Record for every row: SimpleCamQt result, SimpleCamPTZ result, pass/fail, notes,
 ## Acceptance
 
 SimpleCamPTZ 0.1.x passes when every in-scope function has a recorded result, critical camera actions and scene behavior match the agreed SimpleCamQt behavior, no unintended camera movement occurs, and known differences are documented. This gate establishes only Windows + VISCA + AViPAS AV-1280W behavior; it does not establish support for another camera, OS, transport, or protocol.
+

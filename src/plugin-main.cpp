@@ -214,6 +214,11 @@ bool obs_module_load(void)
 								      QStringLiteral("Camera %1").arg(index + 1), builtInProfilePath);
 		runtimes[index]->setSharedPresetOwner(*runtimes[0]);
 	}
+    for(auto *runtime : runtimes) {
+        QString error;
+        if(!runtime->migrateLegacyConnection(userProfileDirectory,&error))
+            obs_log(LOG_WARNING,"Camera profile migration: %s",error.toUtf8().constData());
+    }
 	for (int index = 0; index < simplecam::CameraSlotCount; ++index)
 		simplecam::setCameraRuntime(index, runtimes[index]);
 	simplecam::registerPresetSource();
@@ -244,7 +249,7 @@ bool obs_module_load(void)
 	// Isolation test: OBS owns its native dock separators. Do not install a
 	// main-window stylesheet override, proxy style, or custom resize grip.
 	obs_log(LOG_INFO, "[SimpleCamPTZ DockIsolation] build=native-separators-r1 override=OFF customGrip=OFF");
-	obs_frontend_add_tools_menu_item("SimpleCamPTZ Profile Test", openProfileTestTool, nullptr);
+	obs_frontend_add_tools_menu_item("SimpleCamPTZ Camera Profiler", openProfileTestTool, nullptr);
 	obs_frontend_add_tools_menu_item("SimpleCamPTZ Cameras", openCamerasTool, nullptr);
 	obs_frontend_add_event_callback(onFrontendEvent, nullptr);
 	signal_handler_connect(obs_get_signal_handler(), "source_transition_start", onOutputTransitionSignal, nullptr);

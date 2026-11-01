@@ -134,3 +134,4 @@ Implement the protocol drivers incrementally: first VISCA on the user's AViPAS A
 4. BirdDog and AVer, which exercise nontrivial VISCA-over-IP framing/ports.
 5. Panasonic, Canon and Datavideo model profiles after exact model documents are reviewed.
 6. After the VISCA action/profile workflow is established, add ONVIF and NDI as separate PTZ-only adapters. NDI is an optional SDK integration with structured metadata, not a camera JSON raw-hex dialect.
+
