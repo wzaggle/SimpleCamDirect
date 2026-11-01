@@ -1,9 +1,9 @@
 # Included after the project Qt/OBS/plugin-support targets exist.
 add_executable(simplecamptz_runtime_state_tests EXCLUDE_FROM_ALL
   tests/camera_runtime_state_test.cpp
-  src/camera_runtime.cpp
+  src/camera_runtime.cpp src/panasonic_aw.cpp
   src/visca_udp_transport.cpp
-  src/camera_profile.cpp
+  src/camera_profile.cpp src/panasonic_aw_protocol.cpp
 )
 target_include_directories(simplecamptz_runtime_state_tests PRIVATE src)
 target_compile_features(simplecamptz_runtime_state_tests PRIVATE cxx_std_17)
@@ -16,9 +16,9 @@ add_test(NAME simplecamptz_runtime_state_tests
 # Explicit opt-in: does not add test executables to a normal Install build.
 add_executable(simplecamptz_camera_concurrency_tests EXCLUDE_FROM_ALL
   tests/camera_concurrency_test.cpp
-  src/camera_runtime.cpp
+  src/camera_runtime.cpp src/panasonic_aw.cpp
   src/visca_udp_transport.cpp
-  src/camera_profile.cpp
+  src/camera_profile.cpp src/panasonic_aw_protocol.cpp
 )
 target_include_directories(simplecamptz_camera_concurrency_tests PRIVATE src)
 target_compile_features(simplecamptz_camera_concurrency_tests PRIVATE cxx_std_17)

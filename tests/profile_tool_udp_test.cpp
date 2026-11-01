@@ -218,7 +218,7 @@ public:
                 replies.writeDatagram(value,datagram.senderAddress(),datagram.senderPort());
             }
         });
-        check(tool.connectionVariant_->count()==3 && tool.windowTitle().contains("Camera Profiler"), "three independent methods and renamed title");
+        check(tool.connectionVariant_->count()==4 && tool.windowTitle().contains("Camera Profiler"), "four independent methods and renamed title");
         tool.connectionVariant_->setCurrentIndex(tool.connectionVariant_->findData(QStringLiteral("raw-visca-udp")));
         check(!tool.sonyUdp() && tool.udpMethod() && tool.resetDelay_->isEnabled()==false, "raw UDP has no reset setup operation");
         tool.profileName_->setText(QStringLiteral("Community Test Camera"));

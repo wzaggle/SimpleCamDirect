@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.invalid/simplecam/camera-profile.schema.json",
   "title": "Camera Profile Draft",
-  "description": "Draft schema for declarative OBS PTZ camera profiles. Product identity and schema version are provisional. Initial implementation is VISCA-only; later protocols require implemented drivers and editor modes.",
+  "description": "Draft schema for declarative OBS PTZ camera profiles. Product identity and schema version are provisional. Implemented methods include VISCA and experimental Panasonic AW over HTTP; other protocols require implemented drivers and editor modes.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "identity", "support", "capabilities", "connections", "commands"],
@@ -133,10 +133,10 @@
         "properties": {
           "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{1,63}$"},
           "label": {"type": "string", "minLength": 1, "maxLength": 120},
-          "protocol": {"enum": ["visca", "pelco-d", "pelco-p", "onvif-ptz", "ndi-ptz", "dvip", "manufacturer-api"]},
-          "transport": {"enum": ["serial-rs232", "serial-rs422", "serial-rs485", "tcp", "udp", "onvif-http", "ndi-sdk"]},
-          "framing": {"enum": ["raw-visca", "visca-ip-header", "pelco-frame", "onvif-ptz-service", "ndi-ptz-api", "dvip-frame", "manufacturer-defined"]},
-          "driver": {"enum": ["sony-visca-udp", "raw-visca-tcp", "raw-visca-udp"], "description": "Explicit implemented network send method."},
+          "protocol": {"enum": ["visca", "pelco-d", "pelco-p", "onvif-ptz", "ndi-ptz", "dvip", "manufacturer-api", "panasonic-aw"]},
+          "transport": {"enum": ["serial-rs232", "serial-rs422", "serial-rs485", "tcp", "udp", "onvif-http", "ndi-sdk", "http"]},
+          "framing": {"enum": ["raw-visca", "visca-ip-header", "pelco-frame", "onvif-ptz-service", "ndi-ptz-api", "dvip-frame", "manufacturer-defined", "panasonic-aw-cgi"]},
+          "driver": {"enum": ["sony-visca-udp", "raw-visca-tcp", "raw-visca-udp", "panasonic-aw-http"], "description": "Explicit implemented network send method."},
           "tuning": {
             "type": "object", "additionalProperties": false,
             "required": ["minimumRequestGapMs"],

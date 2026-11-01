@@ -145,3 +145,7 @@ The ONVIF PTZ specification states that AbsoluteMove's position is an absolute t
 - Test that per-source transition speed is passed only to profiles declaring it.
 - For future ONVIF, test advertised space discovery, zoom-only requests omitting PanTilt, position/speed separation, XML serialization, selected profile token, and SOAP faults using protocol fixtures.
 
+
+## Panasonic AW tokens in v0.2.1
+
+A separate AW grammar uses `ptz:` command strings with `{AW_P}`, `{AW_T}`, `{AW_ZIN}`, `{AW_ZOUT}`, `{AW_ZP}` and `{AW_PI}`. Pan/tilt normalized levels map to signed AW speeds around 50; zoom position is three hexadecimal digits in 555–FFF; presets are two decimal digits for 1-based slots 1–100. Tokens never expand to URLs. The driver owns the HTTP CGI path, percent encoding and response validation. VISCA token meanings are unchanged. See PANASONIC_HTTP_021.md.

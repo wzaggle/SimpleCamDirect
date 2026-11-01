@@ -1,0 +1,227 @@
+{
+  "schemaVersion": 1,
+  "profileVersion": "0.1.0-draft",
+  "identity": {
+    "id": "panasonic.aw-he130.aw-http",
+    "manufacturer": "Panasonic",
+    "model": "AW-HE130",
+    "displayName": "Panasonic AW-HE130 — HTTP (DRAFT / untested)",
+    "firmware": {
+      "tested": [],
+      "notes": "No physical AW-HE130 testing yet. Commands based on manufacturer interface specification v1.12."
+    }
+  },
+  "support": {
+    "status": "draft",
+    "maintainer": "SimpleCamPTZ project",
+    "lastReviewed": "2026-11-01",
+    "sources": [
+      {
+        "kind": "manufacturer-manual",
+        "title": "HD/4K Integrated Camera Interface Specifications",
+        "url": "https://eww.pass.panasonic.co.jp/pro-av/support/content/guide/DEF/HE50_120_IP/HDIntegratedCamera_InterfaceSpecifications-E.pdf",
+        "revision": "1.12, 2020-04-27; sections 3.1.1, 3.1.3–3.1.7",
+        "accessed": "2026-11-01",
+        "notes": "AW-HE130 included. Manual-reviewed mappings only, not hardware validation."
+      }
+    ]
+  },
+  "capabilities": {
+    "operations": {
+      "panTilt": {
+        "supported": true,
+        "reason": "Experimental command binding; requires AW-HE130 hardware validation."
+      },
+      "panTiltSpeed": {
+        "supported": true,
+        "reason": "Experimental command binding; requires AW-HE130 hardware validation."
+      },
+      "home": {
+        "supported": true,
+        "reason": "Experimental command binding; requires AW-HE130 hardware validation."
+      },
+      "zoom": {
+        "supported": true,
+        "reason": "Experimental command binding; requires AW-HE130 hardware validation."
+      },
+      "zoomSpeed": {
+        "supported": true,
+        "reason": "Experimental command binding; requires AW-HE130 hardware validation."
+      },
+      "zoomAbsolute": {
+        "supported": true,
+        "reason": "Experimental command binding; requires AW-HE130 hardware validation."
+      },
+      "focus": {
+        "supported": true,
+        "reason": "Experimental command binding; requires AW-HE130 hardware validation."
+      },
+      "presetRecall": {
+        "supported": true,
+        "reason": "Experimental command binding; requires AW-HE130 hardware validation."
+      },
+      "presetStore": {
+        "supported": true,
+        "reason": "Experimental command binding; requires AW-HE130 hardware validation."
+      },
+      "power": {
+        "supported": true,
+        "reason": "Experimental command binding; requires AW-HE130 hardware validation."
+      },
+      "positionInquiry": {
+        "supported": true,
+        "reason": "Experimental command binding; requires AW-HE130 hardware validation."
+      },
+      "zoomInquiry": {
+        "supported": true,
+        "reason": "Experimental command binding; requires AW-HE130 hardware validation."
+      }
+    },
+    "limits": {
+      "presetCapacity": 100,
+      "presetMin": 0,
+      "presetMax": 99,
+      "panSpeed": {
+        "minimum": 1,
+        "maximum": 24,
+        "units": "normalized level"
+      },
+      "tiltSpeed": {
+        "minimum": 1,
+        "maximum": 20,
+        "units": "normalized level"
+      },
+      "zoomSpeed": {
+        "minimum": 0,
+        "maximum": 15,
+        "units": "normalized level"
+      },
+      "zoomAbsolute": {
+        "minimum": 1365,
+        "maximum": 4095,
+        "units": "AW hexadecimal position"
+      }
+    }
+  },
+  "connections": [
+    {
+      "id": "panasonic-aw-http",
+      "driver": "panasonic-aw-http",
+      "label": "HTTP — Panasonic AW (experimental)",
+      "protocol": "panasonic-aw",
+      "transport": "http",
+      "framing": "panasonic-aw-cgi",
+      "defaultPort": 80,
+      "portRequired": true,
+      "addressing": {
+        "mode": "none"
+      },
+      "tuning": {
+        "minimumRequestGapMs": 150
+      },
+      "network": {
+        "ipVersions": [
+          "ipv4"
+        ],
+        "authentication": "none",
+        "tls": false,
+        "discovery": "manual"
+      },
+      "response": {
+        "policy": "reply",
+        "timeoutMs": 3000,
+        "retryCount": 0,
+        "serializePerCamera": true,
+        "notes": "Validate HTTP 200 and AW reply. This is acceptance, not physical completion. No update-notification subscription."
+      }
+    }
+  ],
+  "commands": {
+    "powerInquiry": {
+      "driverOperation": "panasonicAw.powerInquiry",
+      "template": "ptz:#O"
+    },
+    "powerOn": {
+      "driverOperation": "panasonicAw.powerOn",
+      "template": "ptz:#O1"
+    },
+    "powerOff": {
+      "driverOperation": "panasonicAw.powerOff",
+      "template": "ptz:#O0",
+      "destructive": true
+    },
+    "movePanTilt": {
+      "driverOperation": "panasonicAw.movePanTilt",
+      "template": "ptz:#PTS{AW_P}{AW_T}"
+    },
+    "stopPanTilt": {
+      "driverOperation": "panasonicAw.stopPanTilt",
+      "template": "ptz:#PTS5050"
+    },
+    "home": {
+      "driverOperation": "panasonicAw.home",
+      "template": "ptz:#APC80008000"
+    },
+    "positionInquiry": {
+      "driverOperation": "panasonicAw.positionInquiry",
+      "template": "ptz:#APC"
+    },
+    "zoomIn": {
+      "driverOperation": "panasonicAw.zoomIn",
+      "template": "ptz:#Z{AW_ZIN}"
+    },
+    "zoomOut": {
+      "driverOperation": "panasonicAw.zoomOut",
+      "template": "ptz:#Z{AW_ZOUT}"
+    },
+    "zoomStop": {
+      "driverOperation": "panasonicAw.zoomStop",
+      "template": "ptz:#Z50"
+    },
+    "zoomAbsolute": {
+      "driverOperation": "panasonicAw.zoomAbsolute",
+      "template": "ptz:#AXZ{AW_ZP}"
+    },
+    "zoomInquiry": {
+      "driverOperation": "panasonicAw.zoomInquiry",
+      "template": "ptz:#GZ"
+    },
+    "focusManual": {
+      "driverOperation": "panasonicAw.focusManual",
+      "template": "ptz:#D10"
+    },
+    "focusAuto": {
+      "driverOperation": "panasonicAw.focusAuto",
+      "template": "ptz:#D11"
+    },
+    "focusNear": {
+      "driverOperation": "panasonicAw.focusNear",
+      "template": "ptz:#F40"
+    },
+    "focusFar": {
+      "driverOperation": "panasonicAw.focusFar",
+      "template": "ptz:#F60"
+    },
+    "focusStop": {
+      "driverOperation": "panasonicAw.focusStop",
+      "template": "ptz:#F50"
+    },
+    "presetRecall": {
+      "driverOperation": "panasonicAw.presetRecall",
+      "template": "ptz:#R{AW_PI}"
+    },
+    "presetStore": {
+      "driverOperation": "panasonicAw.presetStore",
+      "template": "ptz:#M{AW_PI}",
+      "destructive": true
+    }
+  },
+  "notes": [
+    "Experimental draft; no hardware-tested claim. Test individual functions in Profiler; Test All and automatic zoom discovery are unavailable for AW HTTP.",
+    "HTTP requires a numeric IPv4 camera address. HTTP only, no TLS or credential entry in v0.2.1. Authentication/access failures are reported; do not weaken camera security to test.",
+    "Preset buttons 1..100 encode decimal 00..99; no erase binding. Unsupported backlight, exposure compensation and white balance commands are omitted.",
+    "Normalized movement speeds map to AW speed magnitude 1..49 around STOP=50. Confirm directions and lens range on hardware.",
+    "At least 130 ms command gap enforced; default 150 ms. HTTP Connection: close. No automatic power-on, settings polling, command retry or preset writes on startup.",
+    "A preset acknowledgement does not indicate that movement has finished. The following zoom readback may be taken during travel. Emergency shutdown stops are best effort; verify physical STOP behavior."
+  ]
+}

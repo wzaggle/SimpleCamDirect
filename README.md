@@ -1,3 +1,11 @@
+# SimpleCamPTZ v0.2.1 experimental HTTP testing release
+
+Adds HTTP transport with Panasonic AW handling and a separate draft AW-HE130 profile. No real AW-HE130 hardware tests yet. See [Panasonic testing guide](docs/PANASONIC_HTTP_021.md) for first tests, limitations and feedback. Existing VISCA methods remain available; v0.2.0 remains published as the earlier baseline. Build and hardware validation are separate evidence.
+
+The earlier release and build background follows; current behavior is established by source and the v0.2.1 guide.
+
+---
+
 # SimpleCamPTZ v0.2.0 — complete source project
 
 Open this folder in Visual Studio and build/install **windows-x64 / RelWithDebInfo**

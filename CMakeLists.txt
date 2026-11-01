@@ -19,9 +19,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_library(simplecamptz MODULE
   src/plugin-main.cpp
-  src/camera_runtime.cpp
+  src/camera_runtime.cpp src/panasonic_aw.cpp
   src/visca_udp_transport.cpp
-  src/camera_profile.cpp
+  src/camera_profile.cpp src/panasonic_aw_protocol.cpp
   src/profile_test_tool.cpp
   src/camera_docks.cpp
   src/preset_source.cpp
@@ -106,7 +106,7 @@ if(BUILD_TESTING)
 
   add_executable(simplecamptz_profile_tests
     tests/camera_profile_test.cpp
-    src/camera_profile.cpp
+    src/camera_profile.cpp src/panasonic_aw_protocol.cpp
   )
   target_include_directories(simplecamptz_profile_tests PRIVATE src)
   target_link_libraries(simplecamptz_profile_tests PRIVATE Qt6::Core)
@@ -152,7 +152,7 @@ endif()
 
 if(BUILD_TESTING)
   add_executable(simplecamptz_sony_udp_driver EXCLUDE_FROM_ALL
-    tests/sony_udp_driver.cpp src/camera_runtime.cpp src/camera_profile.cpp src/visca_udp_transport.cpp)
+    tests/sony_udp_driver.cpp src/camera_runtime.cpp src/panasonic_aw.cpp src/camera_profile.cpp src/panasonic_aw_protocol.cpp src/visca_udp_transport.cpp)
   target_include_directories(simplecamptz_sony_udp_driver PRIVATE src)
   target_compile_features(simplecamptz_sony_udp_driver PRIVATE cxx_std_17)
   target_compile_definitions(simplecamptz_sony_udp_driver PRIVATE QT_NO_KEYWORDS)
@@ -169,7 +169,7 @@ endif()
 
 if(BUILD_TESTING)
   add_executable(simplecamptz_sony_profile_tests EXCLUDE_FROM_ALL
-    tests/sony_profile_test.cpp src/camera_runtime.cpp src/camera_profile.cpp src/visca_udp_transport.cpp)
+    tests/sony_profile_test.cpp src/camera_runtime.cpp src/panasonic_aw.cpp src/camera_profile.cpp src/panasonic_aw_protocol.cpp src/visca_udp_transport.cpp)
   target_include_directories(simplecamptz_sony_profile_tests PRIVATE src)
   target_compile_features(simplecamptz_sony_profile_tests PRIVATE cxx_std_17)
   target_compile_definitions(simplecamptz_sony_profile_tests PRIVATE QT_NO_KEYWORDS)
@@ -182,8 +182,8 @@ endif()
 # Opt-in headless widget + real localhost transport regression for the Profile Test tool.
 if(BUILD_TESTING)
   add_executable(simplecamptz_profile_tool_udp_tests EXCLUDE_FROM_ALL
-    tests/profile_tool_udp_test.cpp src/profile_test_tool.cpp src/camera_runtime.cpp
-    src/camera_profile.cpp src/visca_udp_transport.cpp)
+    tests/profile_tool_udp_test.cpp src/profile_test_tool.cpp src/camera_runtime.cpp src/panasonic_aw.cpp
+    src/camera_profile.cpp src/panasonic_aw_protocol.cpp src/visca_udp_transport.cpp)
   target_include_directories(simplecamptz_profile_tool_udp_tests PRIVATE src)
   target_compile_features(simplecamptz_profile_tool_udp_tests PRIVATE cxx_std_17)
   target_compile_definitions(simplecamptz_profile_tool_udp_tests PRIVATE QT_NO_KEYWORDS)
@@ -200,8 +200,8 @@ if(BUILD_TESTING)
   # Isolated real-widget card regression; OBS source-name refresh is stubbed by
   # this test. Scene/source recall protection is exercised in the runtime suite.
   add_executable(simplecamptz_preset_editing_tests EXCLUDE_FROM_ALL
-    tests/preset_editing_test.cpp src/camera_docks.cpp src/camera_runtime.cpp
-    src/camera_profile.cpp src/visca_udp_transport.cpp)
+    tests/preset_editing_test.cpp src/camera_docks.cpp src/camera_runtime.cpp src/panasonic_aw.cpp
+    src/camera_profile.cpp src/panasonic_aw_protocol.cpp src/visca_udp_transport.cpp)
   target_include_directories(simplecamptz_preset_editing_tests PRIVATE src)
   target_compile_features(simplecamptz_preset_editing_tests PRIVATE cxx_std_17)
   target_compile_definitions(simplecamptz_preset_editing_tests PRIVATE QT_NO_KEYWORDS)
@@ -223,4 +223,17 @@ if(BUILD_TESTING)
     "${CMAKE_CURRENT_SOURCE_DIR}/data/cameras/avipas-av-1280w.visca.json")
   set_tests_properties(simplecamptz_preset_editing_tests PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=${simplecam_test_qpa}" TIMEOUT 30)
+endif()
+
+if(BUILD_TESTING)
+  add_executable(simplecamptz_panasonic_http_tests EXCLUDE_FROM_ALL
+    tests/panasonic_http_test.cpp src/panasonic_aw.cpp src/panasonic_aw_protocol.cpp
+    src/profile_test_tool.cpp src/camera_runtime.cpp src/camera_profile.cpp src/visca_udp_transport.cpp)
+  target_include_directories(simplecamptz_panasonic_http_tests PRIVATE src)
+  target_compile_features(simplecamptz_panasonic_http_tests PRIVATE cxx_std_17)
+  target_compile_definitions(simplecamptz_panasonic_http_tests PRIVATE QT_NO_KEYWORDS)
+  target_link_libraries(simplecamptz_panasonic_http_tests PRIVATE Qt6::Widgets Qt6::Network OBS::libobs plugin-support)
+  add_test(NAME simplecamptz_panasonic_http_tests COMMAND simplecamptz_panasonic_http_tests
+    "${CMAKE_CURRENT_SOURCE_DIR}/data/cameras/panasonic-aw-he130.aw-http.json")
+  set_tests_properties(simplecamptz_panasonic_http_tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=${simplecam_test_qpa}" TIMEOUT 60)
 endif()

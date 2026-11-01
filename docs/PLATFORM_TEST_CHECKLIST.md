@@ -303,3 +303,7 @@ RelWithDebInfo/OBS first, then M1 and Ubuntu. Serial remains future work.
 
 See PRESET_EDITING_014.md for Rename, blank-preset recall and receive-port UI checks.
 
+
+## v0.2.1 Panasonic test gate
+
+Run all existing suites plus simplecamptz_panasonic_http_tests on Windows x64, Intel macOS, arm64 macOS and Ubuntu. Verify AW profile is packaged. Native builds do not establish physical support. Hardware tests must separately verify ON/STANDBY, readback, directions/STOP, lens limits, disposable preset store/recall, scene triggers, test ownership/release and shutdown. Confirm v0.2.0 VISCA cameras still operate after upgrade.

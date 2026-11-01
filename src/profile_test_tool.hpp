@@ -30,6 +30,7 @@ namespace simplecam {
 class CameraProfileDocument;
 class CameraRuntime;
 class ViscaUdpTransport;
+class PanasonicAwHttpTransport;
 
 class CameraProfileTestDialog final : public QDialog {
 public:
@@ -43,6 +44,7 @@ protected:
 
 private:
     friend class ProfileToolTest;
+    bool httpMethod() const;
     bool sonyUdp() const;
     bool udpMethod() const;
     void newProfile();
@@ -84,6 +86,7 @@ private:
 	void finishZoomDiscovery(bool cancelled = false, bool timedOut = false, bool noProgress = false);
 	void completeZoomDiscoveryUi();
 
+    PanasonicAwHttpTransport *http_ = nullptr;
     ViscaUdpTransport *udp_ = nullptr;
     QVector<QPointer<CameraRuntime>> borrowed_;
     QString borrowedHost_;

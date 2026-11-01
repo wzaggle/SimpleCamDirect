@@ -2,6 +2,7 @@
 
 #include "camera_runtime.hpp"
 #include "visca_udp_transport.hpp"
+#include "panasonic_aw.hpp"
 
 #include <QApplication>
 #include <QJsonDocument>
@@ -16,6 +17,7 @@
 #include <QEvent>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QSaveFile>
 #include <QFormLayout>
 #include <QGridLayout>
 #include <QGroupBox>
@@ -44,11 +46,14 @@ namespace {
 
 QString hexString(const QByteArray &bytes)
 {
-	return QString::fromLatin1(bytes.toHex(' ').toUpper());
+	if(bytes.startsWith("ptz:")) return QString::fromLatin1(bytes);
+    if(bytes.startsWith("p") || bytes.startsWith("gz") || bytes.startsWith("axz") || bytes.startsWith("s") || bytes.startsWith("d1")) return QString::fromLatin1(bytes);
+    return QString::fromLatin1(bytes.toHex(' ').toUpper());
 }
 
 bool isViscaStop(const QByteArray &packet)
 {
+    if(isAwStop(packet)) return true;
     return (packet.size()==6 && (packet.mid(1)==QByteArray::fromHex("01040700ff") || packet.mid(1)==QByteArray::fromHex("01040800ff"))) ||
         (packet.size()==9 && packet.mid(1,3)==QByteArray::fromHex("010601") && packet.mid(6,2)==QByteArray::fromHex("0303"));
 }
@@ -64,6 +69,7 @@ QStringList splitTemplateLine(const QString &text)
 
 bool decodePowerState(const QByteArray &reply, bool *cameraOn)
 {
+    if(decodeAwPower(reply,cameraOn)) return true;
 	qsizetype offset = 0;
 	while (offset < reply.size()) {
 		const qsizetype end = reply.indexOf(static_cast<char>(0xFF), offset);
@@ -178,23 +184,30 @@ void CameraProfileTestDialog::closeEvent(QCloseEvent *event)
 	QDialog::closeEvent(event);
 }
 
+bool CameraProfileTestDialog::httpMethod() const { return connectionVariant_->currentData().toString()==QStringLiteral("panasonic-aw-http"); }
 bool CameraProfileTestDialog::sonyUdp() const { return connectionVariant_->currentData().toString()==QStringLiteral("sony-visca-udp"); }
-bool CameraProfileTestDialog::udpMethod() const { return connectionVariant_->currentData().toString()!=QStringLiteral("raw-visca-tcp"); }
+bool CameraProfileTestDialog::udpMethod() const { return !httpMethod() && connectionVariant_->currentData().toString()!=QStringLiteral("raw-visca-tcp"); }
 bool CameraProfileTestDialog::supportedTransport() const
 {
     const auto method=connectionVariant_->currentData().toString();
-    return method==QStringLiteral("sony-visca-udp") || method==QStringLiteral("raw-visca-udp") || method==QStringLiteral("raw-visca-tcp");
+    return method==QStringLiteral("panasonic-aw-http") || method==QStringLiteral("sony-visca-udp") || method==QStringLiteral("raw-visca-udp") || method==QStringLiteral("raw-visca-tcp");
 }
 void CameraProfileTestDialog::updateConnectionUi()
 {
     if(!udpControls_) return;
     udpControls_->show(); releaseButton_->show();
+    for(auto *button:findChildren<QPushButton *>()) if(button->property("profileTokenAw").isValid())
+        button->setVisible(button->property("profileTokenAw").toBool()==httpMethod());
     localPortRow_->setVisible(udpMethod()); resetDelayRow_->setVisible(sonyUdp());
     localPort_->setEnabled(udpMethod() && !sameLocalPort_->isChecked());
     localPort_->setVisible(udpMethod() && !sameLocalPort_->isChecked()); resetDelay_->setEnabled(sonyUdp());
-    address_->setEnabled(!sonyUdp()); if(sonyUdp()) address_->setValue(1);
-    testConnectionButton_->setText(udpMethod() ? QStringLiteral("Test UDP") : QStringLiteral("Test TCP"));
-    connectionNote_->setText(QStringLiteral("Test IP is temporary. Profile settings above are shared by cameras using that profile."));
+    address_->setEnabled(!sonyUdp() && !httpMethod()); if(sonyUdp()) address_->setValue(1);
+    requestGap_->setMinimum(httpMethod() ? 130 : 0);
+    if(testAllButton_) testAllButton_->setEnabled(!ioBusy_ && !httpMethod() && profile_ && !profile_->commandIds().isEmpty());
+    if(discoverZoomButton_) discoverZoomButton_->setEnabled(!ioBusy_ && !httpMethod());
+    if(zoomPosition_) zoomPosition_->setMinimum(httpMethod() ? 0x555 : 0);
+    testConnectionButton_->setText(httpMethod() ? QStringLiteral("Test HTTP") : udpMethod() ? QStringLiteral("Test UDP") : QStringLiteral("Test TCP"));
+    connectionNote_->setText(httpMethod() ? QStringLiteral("Experimental Panasonic AW/HTTP: numeric IPv4, no credential entry/TLS. Test commands individually; replies confirm acceptance, not completed movement.") : QStringLiteral("Test IP is temporary. Profile settings above are shared by cameras using that profile."));
 }
 void CameraProfileTestDialog::newProfile()
 {
@@ -220,7 +233,7 @@ void CameraProfileTestDialog::setTestBusy(bool busy)
     tokenControls_->setEnabled(!busy);
     valueControls_->setEnabled(!busy || zoomDiscoveryActive_);
     releaseButton_->setEnabled(sessionActive_);
-    if (!busy) address_->setEnabled(!sonyUdp());
+    if (!busy) address_->setEnabled(!sonyUdp() && !httpMethod());
 }
 
 bool CameraProfileTestDialog::prepareUdp(QString *error)
@@ -228,8 +241,8 @@ bool CameraProfileTestDialog::prepareUdp(QString *error)
     const QString host = host_->text().trimmed();
     const QHostAddress target(host);
     if(host.isEmpty()) { *error=QStringLiteral("Enter a test IP address first"); return false; }
-    if (udpMethod() && target.protocol() != QAbstractSocket::IPv4Protocol) {
-        *error = QStringLiteral("UDP tests require a numeric IPv4 address."); return false;
+    if ((udpMethod() || httpMethod()) && target.protocol() != QAbstractSocket::IPv4Protocol) {
+        *error = QStringLiteral("UDP/HTTP tests require a numeric IPv4 address."); return false;
     }
     if (!applyEditsToProfile()) {
         *error = status_->text(); return false;
@@ -249,6 +262,8 @@ bool CameraProfileTestDialog::prepareUdp(QString *error)
         borrowedHost_ = host; borrowedPort_=static_cast<quint16>(port_->value());
         sessionActive_=true;
         if(udpMethod()) udp_ = new ViscaUdpTransport(this);
+        if(httpMethod()) http_ = new PanasonicAwHttpTransport(this);
+        if(http_) http_->trace=[this](const QString &line) { trace_->appendPlainText(line); };
         if(udp_) udp_->trace = [this](const QString &line) {
             trace_->appendPlainText(QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss.zzz")) + QStringLiteral(" · ") + line);
         };
@@ -256,6 +271,7 @@ bool CameraProfileTestDialog::prepareUdp(QString *error)
     }
     if(udp_) udp_->configure(host, static_cast<quint16>(port_->value()), static_cast<quint16>(localPort_->value()),
         requestGap_->value(), replyTimeout_->value(), resetDelay_->value(), sonyUdp(), address_->value());
+    if(http_) http_->configure(host,static_cast<quint16>(port_->value()),requestGap_->value(),replyTimeout_->value());
     releaseButton_->setEnabled(true);
     return true;
 }
@@ -268,6 +284,7 @@ void CameraProfileTestDialog::releaseUdp()
     stopTcpMovement();
     lastTcpReply_.invalidate();
     sessionActive_=false;
+    if(http_) { delete http_; http_=nullptr; }
     if (udp_) {
         // Destruction sends best-effort stops for every active axis before releasing the listener.
         delete udp_;
@@ -318,6 +335,7 @@ void CameraProfileTestDialog::buildUi()
     connectionVariant_->addItem(QStringLiteral("VISCA / TCP — Raw"),QStringLiteral("raw-visca-tcp"));
     connectionVariant_->addItem(QStringLiteral("VISCA / UDP — Raw"),QStringLiteral("raw-visca-udp"));
     connectionVariant_->addItem(QStringLiteral("VISCA / UDP — Sony framing"),QStringLiteral("sony-visca-udp"));
+    connectionVariant_->addItem(QStringLiteral("HTTP — Panasonic AW (experimental)"),QStringLiteral("panasonic-aw-http"));
     port_=new QSpinBox(profileBox); port_->setRange(1,65535); port_->setValue(1259);
     address_=new QSpinBox(profileBox); address_->setRange(1,7); address_->setValue(1);
     auto *browse=new QPushButton(QStringLiteral("Open JSON…"),profileBox);
@@ -400,7 +418,7 @@ void CameraProfileTestDialog::buildUi()
         releaseUdp();
         completeZoomDiscoveryUi();
         setCommandInteractionEnabled(true);
-        testAllButton_->setEnabled(profile_ && !profile_->commandIds().isEmpty());
+        testAllButton_->setEnabled(profile_ && !httpMethod() && !profile_->commandIds().isEmpty());
         setStatus(QStringLiteral("Test canceled/released; active movement was sent best-effort STOP. Normal controls are available; zoom position was not restored."));
     });
     connect(connectionVariant_, qOverload<int>(&QComboBox::currentIndexChanged), this, [this]() {
@@ -491,10 +509,17 @@ void CameraProfileTestDialog::buildUi()
 		{QStringLiteral("Zoom Speed"), QStringLiteral("{ZS}")},
 		{QStringLiteral("Zoom Position"), QStringLiteral("{ZP}")},
 		{QStringLiteral("Preset Index"), QStringLiteral("{PI}")},
+        {QStringLiteral("AW Pan"),QStringLiteral("{AW_P}")},
+        {QStringLiteral("AW Tilt"),QStringLiteral("{AW_T}")},
+        {QStringLiteral("AW Zoom In"),QStringLiteral("{AW_ZIN}")},
+        {QStringLiteral("AW Zoom Out"),QStringLiteral("{AW_ZOUT}")},
+        {QStringLiteral("AW Zoom Position"),QStringLiteral("{AW_ZP}")},
+        {QStringLiteral("AW Preset Index"),QStringLiteral("{AW_PI}")},
 	};
 	for (const auto &token : tokens) {
 		auto *button = new QPushButton(token.first, tokenBox);
 		button->setToolTip(QStringLiteral("Insert %1").arg(token.second));
+        button->setProperty("profileTokenAw",token.second.startsWith(QStringLiteral("{AW_")));
 		connect(button, &QPushButton::clicked, this, [this, token]() { insertToken(token.second); });
 		tokenLayout->addWidget(button);
 	}
@@ -503,7 +528,7 @@ void CameraProfileTestDialog::buildUi()
 	tokenBox->setMaximumWidth(175);
 
 	auto *outputStack = new QSplitter(Qt::Vertical, workArea);
-	auto *previewGroup = new QGroupBox(QStringLiteral("Rendered VISCA Bytes"), outputStack);
+	auto *previewGroup = new QGroupBox(QStringLiteral("Rendered Command"), outputStack);
 	preview_ = new QPlainTextEdit(previewGroup);
 	preview_->setReadOnly(true);
 	preview_->setLineWrapMode(QPlainTextEdit::WidgetWidth);
@@ -516,6 +541,16 @@ void CameraProfileTestDialog::buildUi()
 	trace_->setLineWrapMode(QPlainTextEdit::WidgetWidth);
 	auto *traceLayout = new QVBoxLayout(traceGroup);
 	traceLayout->addWidget(trace_);
+    auto *exportTrace=new QPushButton(QStringLiteral("Save trace..."),traceGroup);
+    traceLayout->addWidget(exportTrace);
+    connect(exportTrace,&QPushButton::clicked,this,[this]() {
+        const auto path=QFileDialog::getSaveFileName(this,QStringLiteral("Save camera test trace"),QStringLiteral("SimpleCamPTZ-camera-trace.txt"),QStringLiteral("Text files (*.txt)"));
+        if(path.isEmpty()) return;
+        QSaveFile file(path);
+        const auto bytes=(QStringLiteral("SimpleCamPTZ camera test trace\nProfile: %1 (%2)\nMethod: %3\nReview network addresses before sharing.\n\n").arg(profile_ ? profile_->id() : QString(),profile_ ? profile_->profileVersion() : QString(),connectionVariant_->currentData().toString())+trace_->toPlainText()).toUtf8();
+        if(!file.open(QIODevice::WriteOnly) || file.write(bytes)!=bytes.size() || !file.commit()) setStatus(QStringLiteral("Could not save trace"),true);
+        else setStatus(QStringLiteral("Trace saved. Review network addresses before sharing."));
+    });
 	outputStack->addWidget(previewGroup);
 	outputStack->addWidget(traceGroup);
 	outputStack->setStretchFactor(0, 1);
@@ -598,7 +633,7 @@ void CameraProfileTestDialog::populateCommands()
 	if (!profile_)
 		return;
 	const QStringList ids = profile_->commandIdsInTestOrder();
-	testAllButton_->setEnabled(!ids.isEmpty());
+	testAllButton_->setEnabled(!httpMethod() && !ids.isEmpty());
 	commands_->setRowCount(ids.size());
 	for (int row = 0; row < ids.size(); ++row) {
 		const CameraProfileCommand command = profile_->command(ids.at(row));
@@ -681,7 +716,7 @@ QStringList CameraProfileTestDialog::selectedTemplates() const
 QVector<QByteArray> CameraProfileTestDialog::renderSelected(QString *error) const
 {
 	QVector<QByteArray> packets;
-	if (!renderViscaTemplates(selectedTemplates(), templateValues(), &packets, error))
+	if (!profile_->renderTemplates(selectedTemplates(), templateValues(), &packets, error))
 		return {};
 	return packets;
 }
@@ -719,7 +754,7 @@ void CameraProfileTestDialog::sendCurrentCommand()
 	const QStringList templates = selectedTemplates();
 	QVector<QByteArray> packets;
 	QString error;
-	if (!renderViscaTemplates(templates, templateValues(), &packets, &error)) {
+	if (!profile_->renderTemplates(templates, templateValues(), &packets, &error)) {
 		setStatus(error, true);
 		return;
 	}
@@ -783,7 +818,7 @@ void CameraProfileTestDialog::sendCurrentCommand()
 		}
 		if (ok) {
 			if (id != QStringLiteral("powerInquiry"))
-				self->setCommandResult(id, QStringLiteral("PASS"), describeReplies(replies));
+				self->setCommandResult(id, QStringLiteral("PASS"), self->httpMethod() ? QStringLiteral("AW acknowledgement validated; verify physical result") : describeReplies(replies));
 			if (id != QStringLiteral("powerInquiry"))
 				self->trace_->appendPlainText(QStringLiteral("%1 · %2: complete")
 							      .arg(QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss.zzz")), id));
@@ -792,7 +827,7 @@ void CameraProfileTestDialog::sendCurrentCommand()
 					self->trace_->appendPlainText(QStringLiteral("RX %1: %2").arg(i + 1).arg(hexString(replies.at(i))));
 			}
 			if (id != QStringLiteral("powerInquiry"))
-				self->setStatus(QStringLiteral("%1 completed. See trace for camera replies.").arg(prettyName(id)));
+				self->setStatus(self->httpMethod() ? QStringLiteral("%1: AW reply validated. Verify physical result; reply is not a motion-completion notification.").arg(prettyName(id)) : QStringLiteral("%1 completed. See trace for camera replies.").arg(prettyName(id)));
 		} else {
 			self->setCommandResult(id, QStringLiteral("FAIL"), resultMessage);
 			self->trace_->appendPlainText(QStringLiteral("%1 · %2: FAILED · %3")
@@ -838,6 +873,7 @@ void CameraProfileTestDialog::sendCurrentCommand()
 
 void CameraProfileTestDialog::startTestAll()
 {
+    if(httpMethod()) { setStatus(QStringLiteral("Test All is unavailable for experimental Panasonic HTTP. Test individual commands."),true); return; }
 	if (ioBusy_) {
 		setStatus(QStringLiteral("A camera test is already in progress."), true);
 		return;
@@ -912,7 +948,7 @@ void CameraProfileTestDialog::runTestAllCommand(int index)
 	}
 	QVector<QByteArray> packets;
 	QString error;
-	if (!renderViscaTemplates(selectedTemplates(), templateValues(), &packets, &error)) {
+	if (!profile_->renderTemplates(selectedTemplates(), templateValues(), &packets, &error)) {
 		setCommandResult(id, QStringLiteral("FAIL"), QStringLiteral("Could not render: %1").arg(error));
 		trace_->appendPlainText(QStringLiteral("%1 · %2: FAIL · render error · %3")
 					.arg(QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss.zzz")), id, error));
@@ -968,7 +1004,7 @@ void CameraProfileTestDialog::finishTestAll()
 	valueControls_->setEnabled(true);
 	tokenControls_->setEnabled(true);
 	setCommandInteractionEnabled(true);
-	testAllButton_->setEnabled(profile_ && !profile_->commandIds().isEmpty());
+	testAllButton_->setEnabled(profile_ && !httpMethod() && !profile_->commandIds().isEmpty());
 	testConnectionButton_->setEnabled(true);
 	int passed = 0;
 	int failed = 0;
@@ -1041,12 +1077,12 @@ void CameraProfileTestDialog::testConnection()
 	}
 	const QString host = host_->text().trimmed();
 	const quint16 port = static_cast<quint16>(port_->value());
-    if (udpMethod()) {
+    if (udpMethod() || httpMethod()) {
         if (!applyEditsToProfile()) return;
         setTestBusy(true);
         queryCameraPower([this](bool ok, bool on, const QString &message) {
             setTestBusy(false);
-            setStatus(ok ? (on ? QStringLiteral("UDP: camera reports ON.") : QStringLiteral("UDP: camera reports STANDBY.")) : message, !ok);
+            setStatus(ok ? (on ? QStringLiteral("Camera reports ON.") : QStringLiteral("Camera reports STANDBY.")) : message, !ok);
         });
         return;
     }
@@ -1123,7 +1159,7 @@ bool CameraProfileTestDialog::applyEditsToProfile()
 		if (auto *lineEditor = qobject_cast<QLineEdit *>(editorWidget))
 			lines = splitTemplateLine(lineEditor->text());
         QVector<QByteArray> rendered;
-        if (!renderViscaTemplates(lines, templateValues(), &rendered, &error)) {
+        if (!profile_->renderTemplates(lines, templateValues(), &rendered, &error)) {
             setStatus(QStringLiteral("%1: %2").arg(id, error), true); return false;
         }
         if (sonyUdp()) for (const auto &packet : rendered) {
@@ -1248,7 +1284,7 @@ void CameraProfileTestDialog::queryCameraPower(std::function<void(bool, bool, co
 	const CameraProfileCommand binding = profile_->command(QStringLiteral("powerInquiry"));
 	QVector<QByteArray> packets;
 	QString error;
-	if (binding.templates.isEmpty() || !renderViscaTemplates(binding.templates, templateValues(), &packets, &error) ||
+	if (binding.templates.isEmpty() || !profile_->renderTemplates(binding.templates, templateValues(), &packets, &error) ||
 	    packets.size() != 1) {
 		completion(false, false, error.isEmpty() ? QStringLiteral("Profile has no valid one-packet power inquiry.") : error);
 		return;
@@ -1278,6 +1314,16 @@ void CameraProfileTestDialog::sendOnePacket(
     Q_UNUSED(timeoutMs);
     QString error;
     if (!prepareUdp(&error)) { completion(false, {}, error); return; }
+    if(httpMethod()) {
+        auto reply=std::make_shared<QByteArray>();
+        ViscaTcpTransport::FrameCommand command{packet,true};
+        command.onReply=[reply](const QByteArray &body) { *reply=body; };
+        const auto generation=sessionGeneration_;
+        http_->enqueue({command},[this,generation,reply,completion](bool ok,const QString &message) {
+            if(generation==sessionGeneration_) completion(ok,*reply,message);
+        },0,isAwStop(packet));
+        return;
+    }
     if (udpMethod()) {
         auto reply = std::make_shared<QByteArray>();
         ViscaTcpTransport::FrameCommand command;
@@ -1390,7 +1436,7 @@ void CameraProfileTestDialog::queryZoom(std::function<void(bool, int, const QStr
 	const CameraProfileCommand command = profile_->command(QStringLiteral("zoomInquiry"));
 	QVector<QByteArray> packets;
 	QString error;
-	if (!renderViscaTemplates(command.templates, templateValues(), &packets, &error) || packets.size() != 1) {
+	if (!profile_->renderTemplates(command.templates, templateValues(), &packets, &error) || packets.size() != 1) {
 		completion(false, -1, error.isEmpty() ? QStringLiteral("Zoom inquiry must be one packet") : error);
 		return;
 	}
@@ -1419,6 +1465,7 @@ void CameraProfileTestDialog::queryZoom(std::function<void(bool, int, const QStr
 
 void CameraProfileTestDialog::startZoomDiscovery()
 {
+    if(httpMethod()) { setStatus(QStringLiteral("Automatic zoom discovery is unavailable for experimental AW profiles; use individual readback tests."),true); return; }
 	if (zoomDiscoveryActive_) {
 		if (zoomDiscoveryFinishing_)
 			return;
@@ -1486,7 +1533,7 @@ void CameraProfileTestDialog::startZoomDiscovery()
 		self->setStatus(QStringLiteral("Starting position 0x%1; moving toward telephoto…").arg(startHex));
 		QVector<QByteArray> packets;
 		QString renderError;
-		if (!renderViscaTemplates(self->profile_->command(QStringLiteral("zoomIn")).templates,
+		if (!self->profile_->renderTemplates(self->profile_->command(QStringLiteral("zoomIn")).templates,
 					  self->templateValues(), &packets, &renderError) || packets.isEmpty()) {
 			self->setStatus(renderError, true);
 			self->finishZoomDiscovery(true);
@@ -1569,7 +1616,7 @@ void CameraProfileTestDialog::finishZoomDiscovery(bool cancelled, bool timedOut,
 	}
 	QVector<QByteArray> stopPackets;
 	QString error;
-	if (!renderViscaTemplates(profile_->command(QStringLiteral("zoomStop")).templates,
+	if (!profile_->renderTemplates(profile_->command(QStringLiteral("zoomStop")).templates,
 				  templateValues(), &stopPackets, &error) || stopPackets.isEmpty()) {
 		setStatus(error, true);
 		completeZoomDiscoveryUi();
@@ -1612,7 +1659,7 @@ void CameraProfileTestDialog::finishZoomDiscovery(bool cancelled, bool timedOut,
 				values.zoomPosition = self->zoomDiscoveryInitial_;
 				QVector<QByteArray> restore;
 				QString restoreError;
-				if (renderViscaTemplates(self->profile_->command(QStringLiteral("zoomAbsolute")).templates,
+				if (self->profile_->renderTemplates(self->profile_->command(QStringLiteral("zoomAbsolute")).templates,
 							 values, &restore, &restoreError) && !restore.isEmpty()) {
 					self->runPacketSequence(restore, QStringLiteral("zoomAbsolute"), [self, endpoint, cancelled, timedOut, noProgress, completed](bool ok, const QVector<QByteArray> &, const QString &restoreMessage) {
 						if (!self)

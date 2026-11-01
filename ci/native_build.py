@@ -252,7 +252,7 @@ def main():
                'simplecamptz_program_output_tests', 'simplecamptz_source_reference_tests',
                'simplecamptz_preset_name_allocator_tests', 'simplecamptz_sony_udp_driver',
                'simplecamptz_sony_profile_tests', 'simplecamptz_profile_tool_udp_tests',
-               'simplecamptz_preset_editing_tests']
+               'simplecamptz_preset_editing_tests', 'simplecamptz_panasonic_http_tests']
     run('cmake', '--build', build, '--config', CONFIG, '--target', *targets, '--parallel', PARALLEL)
     if kind in ('macos', 'macos-intel'):
         stage_macos_test_libraries(build)

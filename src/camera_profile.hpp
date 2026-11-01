@@ -42,6 +42,8 @@ public:
     QString networkMethod() const;
     QJsonObject networkConnection() const;
     bool supportsRawViscaUdp() const;
+    bool supportsPanasonicHttp() const;
+    bool renderTemplates(const QStringList &, const ViscaTemplateValues &, QVector<QByteArray> *, QString * = nullptr) const;
     bool profileOwnsConnection() const;
 	bool setSonyUdpSettings(int port, int localPort, int gapMs, int resetMs, int timeoutMs, QString *error = nullptr);
 	QString path() const { return path_; }
@@ -52,7 +54,7 @@ public:
 	int nativeZoomMaximum() const;
 	bool supportsRawViscaTcp() const;
     bool supportsSonyViscaUdp() const;
-    bool supportsRuntimeConnection() const { return supportsRawViscaTcp() || supportsSonyViscaUdp() || supportsRawViscaUdp(); }
+    bool supportsRuntimeConnection() const { return supportsRawViscaTcp() || supportsSonyViscaUdp() || supportsRawViscaUdp() || supportsPanasonicHttp(); }
     QJsonObject sonyUdpConnection() const;
 	QJsonObject root() const { return root_; }
 	QStringList connectionIds() const;

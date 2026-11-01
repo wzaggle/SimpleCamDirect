@@ -1,4 +1,5 @@
 #include "camera_profile.hpp"
+#include "panasonic_aw_protocol.hpp"
 
 #include <QDateTime>
 #include <QFile>
@@ -158,8 +159,9 @@ bool CameraProfileDocument::parseRoot(const QJsonObject &root, QString *error)
 			setError(error, QStringLiteral("Connection variants need unique ids, labels, transport, and framing"));
 			return false;
 		}
-		if (connection.value(QStringLiteral("protocol")).toString() != QStringLiteral("visca")) {
-			setError(error, QStringLiteral("Camera Profiler supports VISCA profiles only"));
+		const bool aw = connection.value(QStringLiteral("driver")).toString()==QStringLiteral("panasonic-aw-http");
+        if (connection.value(QStringLiteral("protocol")).toString() != (aw ? QStringLiteral("panasonic-aw") : QStringLiteral("visca"))) {
+			setError(error, QStringLiteral("Unsupported profile protocol/driver combination"));
 			return false;
 		}
         if (connection.value(QStringLiteral("driver")).toString() == QStringLiteral("sony-visca-udp")) {
@@ -203,6 +205,17 @@ bool CameraProfileDocument::parseRoot(const QJsonObject &root, QString *error)
                 !integer(connection.value(QStringLiteral("response")).toObject().value(QStringLiteral("timeoutMs")),50,30000) ||
                 (udp && !integer(connection.value(QStringLiteral("udp")).toObject().value(QStringLiteral("localPort")),1,65535))) {
                 setError(error,QStringLiteral("Raw VISCA profile needs valid transport/framing, ports, request gap and reply timeout")); return false;
+            }
+        } else if (aw) {
+            const auto port=connection.value(QStringLiteral("defaultPort"));
+            const auto gap=connection.value(QStringLiteral("tuning")).toObject().value(QStringLiteral("minimumRequestGapMs"));
+            const auto timeout=connection.value(QStringLiteral("response")).toObject().value(QStringLiteral("timeoutMs"));
+            if(connections.size()!=1 || connection.value(QStringLiteral("transport")).toString()!=QStringLiteral("http") ||
+               connection.value(QStringLiteral("framing")).toString()!=QStringLiteral("panasonic-aw-cgi") ||
+               port.toDouble()!=port.toInt(-1) || port.toInt()<1 || port.toInt()>65535 ||
+               gap.toDouble()!=gap.toInt(-1) || gap.toInt()<130 || gap.toInt()>2000 ||
+               timeout.toDouble()!=timeout.toInt(-1) || timeout.toInt()<50 || timeout.toInt()>30000) {
+                setError(error,QStringLiteral("Panasonic HTTP needs one AW/HTTP connection, port, gap 130–2000 ms and timeout 50–30000 ms")); return false;
             }
         } else if (!driver.isEmpty() && driver != QStringLiteral("sony-visca-udp")) {
             setError(error,QStringLiteral("Unsupported network driver: %1").arg(driver)); return false;
@@ -273,6 +286,16 @@ bool CameraProfileDocument::parseRoot(const QJsonObject &root, QString *error)
                 ((name == QStringLiteral("panSpeed") || name == QStringLiteral("tiltSpeed")) && low < 1)) {
                 setError(error,QStringLiteral("Invalid VISCA profile range: %1").arg(name)); return false;
             }
+        }
+    }
+    if(connections.first().toObject().value(QStringLiteral("driver")).toString()==QStringLiteral("panasonic-aw-http")) {
+        for(auto it=commands.begin();it!=commands.end();++it) {
+            const auto b=it.value().toObject(); QStringList lines;
+            if(b.contains(QStringLiteral("template"))) lines.append(b.value(QStringLiteral("template")).toString());
+            else for(auto step:b.value(QStringLiteral("sequence")).toArray()) lines.append(step.toString());
+            ViscaTemplateValues v; v.zoomPosition=0x555; QVector<QByteArray> packets;
+            if(!renderAwTemplates(lines,v,&packets,error)) return false;
+            if(!awBindingMatches(it.key(),packets)) { setError(error,QStringLiteral("AW template does not match semantic action: %1").arg(it.key())); return false; }
         }
     }
     int sonyConnections = 0;
@@ -349,6 +372,7 @@ QJsonObject CameraProfileDocument::networkConnection() const
 {
     for (const QJsonValue v : root_.value(QStringLiteral("connections")).toArray()) {
         const auto c = v.toObject();
+        if (c.value(QStringLiteral("driver")).toString()==QStringLiteral("panasonic-aw-http")) return c;
         if (c.value(QStringLiteral("protocol")).toString()!=QStringLiteral("visca")) continue;
         const auto transport=c.value(QStringLiteral("transport")).toString();
         const auto framing=c.value(QStringLiteral("framing")).toString();
@@ -360,11 +384,15 @@ QJsonObject CameraProfileDocument::networkConnection() const
 QString CameraProfileDocument::networkMethod() const
 {
     const auto c=networkConnection();
+    if(c.value(QStringLiteral("driver")).toString()==QStringLiteral("panasonic-aw-http")) return QStringLiteral("panasonic-aw-http");
     if(c.value(QStringLiteral("transport")).toString()==QStringLiteral("tcp")) return QStringLiteral("raw-visca-tcp");
     if(c.value(QStringLiteral("driver")).toString()==QStringLiteral("sony-visca-udp")) return QStringLiteral("sony-visca-udp");
     if(c.value(QStringLiteral("driver")).toString()==QStringLiteral("raw-visca-udp")) return QStringLiteral("raw-visca-udp");
     return {};
 }
+bool CameraProfileDocument::supportsPanasonicHttp() const { return networkMethod()==QStringLiteral("panasonic-aw-http"); }
+bool CameraProfileDocument::renderTemplates(const QStringList &lines,const ViscaTemplateValues &v,QVector<QByteArray> *p,QString *e) const
+{ return supportsPanasonicHttp() ? renderAwTemplates(lines,v,p,e) : renderViscaTemplates(lines,v,p,e); }
 bool CameraProfileDocument::supportsRawViscaUdp() const { return networkMethod()==QStringLiteral("raw-visca-udp"); }
 bool CameraProfileDocument::profileOwnsConnection() const { return !networkConnection().value(QStringLiteral("driver")).toString().isEmpty(); }
 
@@ -372,7 +400,7 @@ bool CameraProfileDocument::setProfilerSettings(const QString &name, const QStri
     int gapMs, int resetMs, int timeoutMs, int address, QString *error)
 {
     if(name.trimmed().isEmpty() || name.trimmed().size()>160 ||
-        (method!=QStringLiteral("raw-visca-tcp") && method!=QStringLiteral("raw-visca-udp") && method!=QStringLiteral("sony-visca-udp")) ||
+        (method!=QStringLiteral("raw-visca-tcp") && method!=QStringLiteral("raw-visca-udp") && method!=QStringLiteral("sony-visca-udp") && method!=QStringLiteral("panasonic-aw-http")) ||
         port<1 || port>65535 || localPort<1 || localPort>65535 || gapMs<0 || gapMs>2000 ||
         resetMs<0 || resetMs>2000 || timeoutMs<50 || timeoutMs>30000 || address<1 || address>7) {
         setError(error,QStringLiteral("Enter a profile name, supported method and valid port/timing/address values")); return false;
@@ -380,13 +408,15 @@ bool CameraProfileDocument::setProfilerSettings(const QString &name, const QStri
     auto candidate=root_;
     auto identity=candidate.value(QStringLiteral("identity")).toObject();
     identity.insert(QStringLiteral("displayName"),name.trimmed()); candidate.insert(QStringLiteral("identity"),identity);
-    const bool sony=method==QStringLiteral("sony-visca-udp"), udp=method!=QStringLiteral("raw-visca-tcp");
+    const bool aw=method==QStringLiteral("panasonic-aw-http");
+    if(aw!=supportsPanasonicHttp()) { setError(error,QStringLiteral("Load an AW profile to use HTTP; VISCA bytes and AW command strings are different languages")); return false; }
+    const bool sony=method==QStringLiteral("sony-visca-udp"), udp=!aw && method!=QStringLiteral("raw-visca-tcp");
     auto c=networkConnection();
     c.insert(QStringLiteral("id"),method); c.insert(QStringLiteral("driver"),method);
-    c.insert(QStringLiteral("label"),sony ? QStringLiteral("VISCA / UDP — Sony framing") : udp ? QStringLiteral("VISCA / UDP — Raw") : QStringLiteral("VISCA / TCP — Raw"));
-    c.insert(QStringLiteral("protocol"),QStringLiteral("visca"));
-    c.insert(QStringLiteral("transport"),udp ? QStringLiteral("udp") : QStringLiteral("tcp"));
-    c.insert(QStringLiteral("framing"),sony ? QStringLiteral("visca-ip-header") : QStringLiteral("raw-visca"));
+    c.insert(QStringLiteral("label"),aw ? QStringLiteral("HTTP — Panasonic AW (experimental)") : sony ? QStringLiteral("VISCA / UDP — Sony framing") : udp ? QStringLiteral("VISCA / UDP — Raw") : QStringLiteral("VISCA / TCP — Raw"));
+    c.insert(QStringLiteral("protocol"),aw ? QStringLiteral("panasonic-aw") : QStringLiteral("visca"));
+    c.insert(QStringLiteral("transport"),aw ? QStringLiteral("http") : udp ? QStringLiteral("udp") : QStringLiteral("tcp"));
+    c.insert(QStringLiteral("framing"),aw ? QStringLiteral("panasonic-aw-cgi") : sony ? QStringLiteral("visca-ip-header") : QStringLiteral("raw-visca"));
     c.insert(QStringLiteral("defaultPort"),port);
     c.insert(QStringLiteral("addressing"),QJsonObject{{QStringLiteral("mode"),QStringLiteral("profile-fixed")},{QStringLiteral("default"),sony ? 1 : address}});
     c.insert(QStringLiteral("tuning"),QJsonObject{{QStringLiteral("minimumRequestGapMs"),gapMs}});
@@ -414,7 +444,7 @@ bool CameraProfileDocument::setProfileVersion(const QString &version,QString *er
 }
 bool CameraProfileDocument::setLocalPortPolicy(bool sameAsCamera,QString *error)
 {
-    if(networkMethod()==QStringLiteral("raw-visca-tcp")) return true;
+    if(networkMethod()==QStringLiteral("raw-visca-tcp") || supportsPanasonicHttp()) return true;
     auto candidate=root_;
     auto connections=candidate.value(QStringLiteral("connections")).toArray();
     if(connections.size()!=1) { setError(error,QStringLiteral("Local-port policy requires one network method")); return false; }
@@ -666,6 +696,7 @@ bool CameraProfileDocument::setCommandTemplates(const QString &id, const QString
 		binding.remove(QStringLiteral("template"));
 	}
 	commands.insert(id, binding);
+    if(supportsPanasonicHttp()) { auto candidate=root_; candidate.insert(QStringLiteral("commands"),commands); return parseRoot(candidate,error); }
 	root_.insert(QStringLiteral("commands"), commands);
 	return true;
 }

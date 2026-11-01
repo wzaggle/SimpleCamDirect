@@ -1,5 +1,10 @@
 # Instructions for coding agents
 
+## v0.2.1 experimental Panasonic AW over HTTP
+
+The maintainer authorizes implementation, private source synchronization, all four native builds and public binary pre-release publication in SimpleCamPTZ-Releases. Keep v0.2.0 available and the source repository private. Read docs/PANASONIC_HTTP_021.md. HTTP transport and AW protocol handling are separate from the draft AW-HE130 model profile. Preserve existing VISCA behavior. No AW hardware validation has occurred. Disable HTTP Test All/discovery, never auto-wake, retain label/cancellation protections, distinguish acceptance from physical completion, and export readable request/reply traces. Credentials/TLS are not implemented; report 401/403 rather than guessing success. Do not widen profile grammar to arbitrary URLs or executable logic. This current instruction supersedes older publication/build restrictions only within this requested release.
+
+
 ## v0.2.0 four-platform packaging
 
 Read docs/RELEASE_020.md. The maintainer now authorizes GitHub synchronization

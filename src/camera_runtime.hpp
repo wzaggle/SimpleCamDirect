@@ -22,6 +22,7 @@ namespace simplecam {
 
 class CameraRuntime;
 class ViscaUdpTransport;
+class PanasonicAwHttpTransport;
 inline constexpr int CameraSlotCount = 5;
 using CameraRuntimeArray = std::array<CameraRuntime *, CameraSlotCount>;
 
@@ -140,6 +141,7 @@ public:
 	explicit CameraRuntime(const QString &settingsPath, const QString &defaultName = QStringLiteral("Camera 1"),
 			const QString &defaultProfilePath = {}, QObject *parent = nullptr);
 
+    ~CameraRuntime() override;
 	bool isEnabled() const;
 	void setEnabled(bool enabled);
 	QString cameraName() const;
@@ -150,6 +152,7 @@ public:
     bool acquireProfileTest(QObject *owner);
     void releaseProfileTest(QObject *owner);
     bool profileTestActive() const { return !profileTestOwner_.isNull(); }
+    bool usesHttp() const;
     bool usesSonyUdp() const;
     bool usesUdp() const;
     bool migrateLegacyConnection(const QString &directory, QString *error=nullptr);
@@ -246,6 +249,7 @@ private:
 	PresetCatalog presets_;
 	CameraRuntime *sharedPresetOwner_ = nullptr;
 	ViscaTcpTransport transport_;
+    PanasonicAwHttpTransport *httpTransport_ = nullptr;
     ViscaUdpTransport *udpTransport_ = nullptr;
     QPointer<QObject> profileTestOwner_;
     QMetaObject::Connection profileTestDestroyed_;

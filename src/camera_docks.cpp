@@ -1663,10 +1663,10 @@ void CameraControlCard::handlePresetButton(int slotIndex)
 		}
 		setStatus(QStringLiteral("Moving to %1…").arg(slot.label));
 		QPointer<CameraControlCard> self(this);
-		runtime_->recallLogicalPreset(slotIndex + 1, 0, [self, label = slot.label](bool ok, const QString &message) {
+		runtime_->recallLogicalPreset(slotIndex + 1, 0, [self, label = slot.label, http = runtime_->usesHttp()](bool ok, const QString &message) {
 			if (!self)
 				return;
-			self->setStatus(ok ? QStringLiteral("Moved to %1").arg(label) : message, !ok);
+			self->setStatus(ok ? (http ? QStringLiteral("Recall accepted: %1").arg(label) : QStringLiteral("Moved to %1").arg(label)) : message, !ok);
 		});
 		return;
 	}
@@ -1930,7 +1930,7 @@ CameraControlDock::CameraControlDock(const CameraRuntimeArray &runtimes, QWidget
 			const QString displayPreset = presetName.trimmed().isEmpty()
 						      ? QStringLiteral("Preset %1").arg(logicalButton)
 						      : presetName;
-			const QString message = QStringLiteral("%1 moved to %2 by OBS").arg(cameraName, displayPreset);
+			const QString message = (runtimePointer->usesHttp() ? QStringLiteral("%1 recall accepted: %2 by OBS") : QStringLiteral("%1 moved to %2 by OBS")).arg(cameraName, displayPreset);
 			for (CameraControlCard *card : {self->camera1Card_, self->camera2Card_}) {
 				if (card && card->runtime_ == runtimePointer) {
 					card->setStatus(message, false, 5000);
