@@ -1,4 +1,6 @@
 #include "camera_docks.hpp"
+#include <obs.h>
+#include <cstdint>
 #include <QApplication>
 #include <QKeyEvent>
 #include <QLineEdit>

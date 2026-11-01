@@ -1,3 +1,7 @@
+The new test-only callbacks explicitly include obs.h and cstdint; the local
+compatibility preinclude had masked the missing OBS type declaration. Native
+rebuild required.
+
 Windows native linking also requires test-only stubs for the full docks Program
 scene/generation callbacks; the isolated preset card fixture never uses them.
 Application symbols and behavior are unchanged. Linux native build/tests and
