@@ -1,3 +1,4 @@
+#include "ui_diagnostics.hpp"
 #include "preset_source.hpp"
 
 #include "camera_runtime.hpp"
@@ -5,6 +6,7 @@
 #include "sharing_section.hpp"
 #include "preset_properties_title.hpp"
 #include "preset_name_allocator.hpp"
+#include "preset_source_rename.hpp"
 
 #include <plugin-support.h>
 
@@ -337,6 +339,7 @@ struct PresetSourceData {
 	bool initialNamePending = true;
 	QString cameraName;
 	QString presetLabel;
+	PresetSourceRenameState renameState;
 };
 
 void refreshSourceName(PresetSourceData *data, bool referencedMoreThanOnce = false, bool allocateIdentity = false)
@@ -368,8 +371,17 @@ void refreshSourceName(PresetSourceData *data, bool referencedMoreThanOnce = fal
 		display = QStringLiteral("<span style=\"color:#FF6050;\">%1 *</span>").arg(display.toHtmlEscaped());
 	const QByteArray displayName = display.toUtf8();
 	const char *currentName = obs_source_get_name(data->source);
-	if (!currentName || display != QString::fromUtf8(currentName))
-		obs_source_set_name(data->source, displayName.constData());
+	const std::string requested(displayName.constData());
+	const std::string current(currentName ? currentName : "");
+	if (!data->renameState.needsRename(requested, current))
+		return;
+	obs_source_set_name(data->source, displayName.constData());
+	const char *acceptedName = obs_source_get_name(data->source);
+	const std::string accepted(acceptedName ? acceptedName : "");
+	data->renameState.remember(requested, accepted);
+	if (accepted != requested)
+		blog(LOG_WARNING, "[SimpleCamPTZ RenameDiag] uuid=%s requested=\"%s\" accepted=\"%s\"; retaining OBS name",
+		     obs_source_get_uuid(data->source), requested.c_str(), accepted.c_str());
 }
 
 struct DeferredSourceRename {
@@ -620,7 +632,7 @@ bool dispatchSceneItem(obs_scene_t *scene, obs_sceneitem_t *item, void *opaque)
 	obs_data_release(settings);
 	if (matches) {
 		if (CameraRuntime *runtime = cameraRuntime(cameraIndex)) {
-			if (cameraIndex == 0 && runtime->activePage() == 0 && preset == 1) {
+			if (verboseUiDiagnosticsEnabled() && cameraIndex == 0 && runtime->activePage() == 0 && preset == 1) {
 				obs_source_t *sceneSource = obs_scene_get_source(scene);
 				const char *sceneName = sceneSource ? obs_source_get_name(sceneSource) : "<unknown>";
 				const char *presetSourceName = obs_source_get_name(source);

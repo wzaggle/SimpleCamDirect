@@ -11,6 +11,18 @@ if(CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION_MAXIMUM)
   message(DEBUG "Maximum Windows API version: ${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION_MAXIMUM}")
 endif()
 
+if(NOT CMAKE_GENERATOR MATCHES "^Visual Studio")
+  message(FATAL_ERROR
+    "This Windows dependency setup requires the Visual Studio generator. "
+    "Select the windows-x64 configure preset, or run cmake --preset windows-x64.")
+endif()
+if(NOT CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION)
+  message(FATAL_ERROR
+    "Visual Studio did not detect a Windows SDK version. "
+    "Use the windows-x64 preset and reconfigure its cache.")
+endif()
+message(STATUS "SimpleCamPTZ selected Windows SDK: ${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}")
+
 if(CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION VERSION_LESS 10.0.20348)
   message(
     FATAL_ERROR

@@ -1,3 +1,7 @@
+# v0.2.6 community test
+
+Build all four platforms. Use the OBS 33 SDK on Windows, report the actual SDK per platform and include the real-libobs rename collision regression in the test gate.
+
 ## Windows widget platform
 
 Windows native compilation and nine CTest suites pass, including all 18 UDP

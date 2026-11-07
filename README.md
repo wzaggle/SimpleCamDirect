@@ -1,3 +1,9 @@
+# v0.2.6 community test
+
+SimpleCamPTZ keeps OBS-assigned names after a collision. Preset fade traces and startup UI dumps are off by default. Set `SIMPLECAMPTZ_UI_DIAGNOSTICS=1` before starting OBS to enable them. The Panasonic HTTP profile remains experimental. Windows builds target OBS 33. Mac and Ubuntu retain their existing OBS 32.2.1 SDK baseline.
+
+For local Windows installation, configure `windows-x64` and build the `windows-install-fixed` preset.
+
 # SimpleCamPTZ v0.2.1 experimental HTTP testing release
 
 Adds HTTP transport with Panasonic AW handling and a separate draft AW-HE130 profile. No real AW-HE130 hardware tests yet. See [Panasonic testing guide](docs/PANASONIC_HTTP_021.md) for first tests, limitations and feedback. Existing VISCA methods remain available; v0.2.0 remains published as the earlier baseline. Build and hardware validation are separate evidence.

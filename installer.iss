@@ -1,5 +1,5 @@
 #define PluginName "SimpleCamPTZ OBS Plugin"
-#define PluginVersion "0.2.1"
+#define PluginVersion "0.2.6"
 #define PluginId "simplecamptz"
 #define PreviousPluginId "simplecamdirect"
 

@@ -1,3 +1,7 @@
+# v0.2.6 community test
+
+Maintainer requests GitHub sync and all four native builds. Apply the verified rename fix and quiet UI logging on the v0.2.1 Panasonic HTTP baseline. Windows uses OBS 33.0.0 and matching dependencies. Mac and Ubuntu use the existing OBS 32.2.1 SDK. Runtime verification of the combined revision is pending.
+
 # Instructions for coding agents
 
 ## v0.2.1 experimental Panasonic AW over HTTP

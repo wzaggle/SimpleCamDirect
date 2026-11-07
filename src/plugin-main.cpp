@@ -261,6 +261,7 @@ bool obs_module_load(void)
 			 []() { simplecam::refreshPresetSourceNames(); });
 	sourceNameRefreshTimer->start();
 	obs_log(LOG_INFO, "SimpleCamPTZ %s loaded", PLUGIN_VERSION);
+	obs_log(LOG_INFO, "RenameDiag mode=FIXED");
 	return true;
 }
 

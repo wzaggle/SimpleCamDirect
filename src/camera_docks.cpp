@@ -1,3 +1,4 @@
+#include "ui_diagnostics.hpp"
 #include "camera_docks.hpp"
 
 #include "camera_runtime.hpp"
@@ -1678,13 +1679,14 @@ void CameraControlCard::flashPresetButton(int slotIndex, const char *origin)
 	if (slotIndex < 0 || slotIndex >= presetButtons_.size())
 		return;
 	const int pageIndex = runtime_->activePage();
-	const bool diagnosticTarget = cameraNumber_ == 1 && pageIndex == 0 && slotIndex == 0;
+	const bool diagnosticTarget = verboseUiDiagnosticsEnabled() && cameraNumber_ == 1 && pageIndex == 0 && slotIndex == 0;
 	constexpr int fadeSteps = 19;
 	constexpr int frameIntervalMs = 67;
 	static std::atomic<unsigned long long> nextDiagnosticSequence{0};
 	const unsigned long long diagnosticSequence = diagnosticTarget ? nextDiagnosticSequence.fetch_add(1) + 1 : 0;
-	const auto fadeClock = std::make_shared<QElapsedTimer>();
-	fadeClock->start();
+	const auto fadeClock = diagnosticTarget ? std::make_shared<QElapsedTimer>() : nullptr;
+	if (fadeClock)
+		fadeClock->start();
 	auto *button = presetButtons_.at(slotIndex);
 	auto *flashButton = static_cast<PresetFlashButton *>(button);
 	QWidget *dockWidget = parentWidget();
@@ -2075,17 +2077,19 @@ CameraControlDock::CameraControlDock(const CameraRuntimeArray &runtimes, QWidget
 		updateSharedGroupIndicator();
 	});
 	refreshTimer->start();
-	productionDiagTimer_ = new QTimer(this);
-	productionDiagTimer_->setSingleShot(true);
-	productionDiagTimer_->setInterval(400);
-	QObject::connect(productionDiagTimer_, &QTimer::timeout, this, [this]() {
-		logProductionUiDiagnostics("settled-layout");
-	});
-	for (int delayMs : {1500, 3500}) {
-		QTimer::singleShot(delayMs, this, [this, delayMs]() {
-			const QByteArray phase = QStringLiteral("startup-%1ms").arg(delayMs).toUtf8();
-			logProductionUiDiagnostics(phase.constData());
+	if (verboseUiDiagnosticsEnabled()) {
+		productionDiagTimer_ = new QTimer(this);
+		productionDiagTimer_->setSingleShot(true);
+		productionDiagTimer_->setInterval(400);
+		QObject::connect(productionDiagTimer_, &QTimer::timeout, this, [this]() {
+			logProductionUiDiagnostics("settled-layout");
 		});
+		for (int delayMs : {1500, 3500}) {
+			QTimer::singleShot(delayMs, this, [this, delayMs]() {
+				const QByteArray phase = QStringLiteral("startup-%1ms").arg(delayMs).toUtf8();
+				logProductionUiDiagnostics(phase.constData());
+			});
+		}
 	}
 	QTimer::singleShot(0, this, [this]() { updateResponsiveLayout(); });
 }

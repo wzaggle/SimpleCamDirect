@@ -252,7 +252,8 @@ def main():
                'simplecamptz_program_output_tests', 'simplecamptz_source_reference_tests',
                'simplecamptz_preset_name_allocator_tests', 'simplecamptz_sony_udp_driver',
                'simplecamptz_sony_profile_tests', 'simplecamptz_profile_tool_udp_tests',
-               'simplecamptz_preset_editing_tests', 'simplecamptz_panasonic_http_tests']
+               'simplecamptz_preset_editing_tests', 'simplecamptz_panasonic_http_tests',
+               'simplecamptz_preset_source_rename_tests']
     run('cmake', '--build', build, '--config', CONFIG, '--target', *targets, '--parallel', PARALLEL)
     if kind in ('macos', 'macos-intel'):
         stage_macos_test_libraries(build)
@@ -275,7 +276,8 @@ def main():
     package(kind, build, output)
     revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
     info = {'product': 'SimpleCamPTZ', 'version': SPEC['version'], 'revision': revision,
-            'platform': kind, 'architecture': platform.machine(), 'obs_sdk': DEPS['obs']['version'],
+            'platform': kind, 'architecture': platform.machine(), 'obs_sdk': (SPEC['dependencies']['obs-studio']['version']
+                        if kind == 'windows' else DEPS['obs']['version']),
             'automated_tests': 'passed', 'hardware_runtime_test': 'not performed by CI',
             'macos_signing': 'ad-hoc; not notarized' if kind in ('macos', 'macos-intel') else None}
     (output / 'BUILD-INFO.json').write_text(json.dumps(info, indent=2) + '\n')

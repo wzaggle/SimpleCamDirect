@@ -74,6 +74,10 @@ add_custom_target(install-simplecamptz
   VERBATIM
 )
 add_dependencies(install-simplecamptz simplecamptz)
+if(WIN32)
+  add_custom_target(install-simplecamptz-fixed)
+  add_dependencies(install-simplecamptz-fixed install-simplecamptz)
+endif()
 
 if(WIN32)
   add_custom_target(package-simplecamptz-installer
@@ -148,6 +152,10 @@ if(BUILD_TESTING)
   target_include_directories(simplecamptz_preset_name_allocator_tests PRIVATE src)
   target_compile_features(simplecamptz_preset_name_allocator_tests PRIVATE cxx_std_17)
   add_test(NAME simplecamptz_preset_name_allocator_tests COMMAND simplecamptz_preset_name_allocator_tests)
+  add_executable(simplecamptz_preset_source_rename_tests EXCLUDE_FROM_ALL tests/preset_source_rename_test.cpp)
+  target_include_directories(simplecamptz_preset_source_rename_tests PRIVATE src)
+  target_link_libraries(simplecamptz_preset_source_rename_tests PRIVATE OBS::libobs)
+  add_test(NAME simplecamptz_preset_source_rename_tests COMMAND simplecamptz_preset_source_rename_tests)
 endif()
 
 if(BUILD_TESTING)
